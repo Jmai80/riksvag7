@@ -1,6 +1,6 @@
 # Riksväg 7
 
-Ett racingspel som körs direkt i webbläsaren och är byggt för mobilen först. Version 1.1 har det första racet – 5,5 km landsväg från staden **Ekeby** till målet i **Sjuby**, mot fem datorförare – och en **topplista på nätet** där allas tider syns.
+Ett racingspel som körs direkt i webbläsaren och är byggt för mobilen först. Version 1.2 har det första racet – 5,5 km landsväg från staden **Ekeby** till målet i **Sjuby**, mot fem datorförare – en **topplista på nätet** där allas tider syns, detaljerade träd längs vägen och en lugn stund med musik efter målgången.
 
 **Spela:** https://jmai80.github.io/riksvag7/
 
@@ -15,7 +15,8 @@ Spelet är syskon till [GTA 7](https://github.com/Jmai80/gta7) och delar dess gr
 - **Sex bilar på startlinjen**, du startar sist. Tre röda lampor på startportalen, sedan grönt.
 - **Vägen:** ut ur Ekeby mellan flerfamiljshus och butiker, förbi en mack, över åkrarna med röda gårdar, ladugårdar och rapsfält, ett krön där bilen lyfter, skogens S-kurvor, bron över **Ekesjön** med båthus och bryggor, byn **Mellby** med kyrkan och den skarpa höger-vänster-kurvan, åsen med ett andra krön, och till sist in i Sjuby till målportalen.
 - Hus, träd, stenar, räcken och stolpar går inte att köra igenom. Kör du för långt ut på fälten (75 m från vägen) eller ner i sjön sätts du tillbaka på vägen. **TILLBAKA**-knappen (R) gör samma sak när du kört fast.
-- Efter målgången: placering, tid, rekord per bil och hela resultatlistan.
+- Efter målgången: motorerna tystnar, en glad melodi spelar och sedan en lugn låt medan du tittar på placering, tid, rekord per bil och hela resultatlistan.
+- **Träden längs vägen** är detaljerade: granar med hängande grenar i varv, tallar med orange stam och barrtofsar, björkar med vit näver och hängande lövkvistar. De gungar lite i vinden och kastar skuggor på vägen. Längre bort används enklare träd.
 - **Topplistan:** efter målgången skriver du ditt namn och trycker **SPARA TID**. Spelet berättar var du hamnade, totalt och med din bil. **TOPPLISTA** på startsidan visar de tio bästa tiderna, för alla bilar eller en i taget. Listan ligger i en tabell (`riksvag7_highscores`) i Supabase-projektet cityguess; tabellen skapas med `supabase/riksvag7_highscores.sql`.
 
 ## Kontroller
@@ -37,7 +38,7 @@ Spelet är syskon till [GTA 7](https://github.com/Jmai80/gta7) och delar dess gr
 - `src/world.js` – allt längs vägen som data: hus, gårdar, kyrkan, träd, fält, räcken, skyltar och kollisioner.
 - `src/carmodel.js` – de realistiska bilarna: en mjuk kaross svept längs bilen, detaljer projicerade på ytan, hjul med fälgar och bromsok.
 - `src/game.js`, `src/ai.js` – racet och datorförarna (från GTA 7:s gatloppsförare).
-- `src/render.js`, `src/scenery.js`, `src/sky.js`, `src/textures.js` – grafiken; `src/hud.js`, `src/audio.js`, `src/input.js`, `src/main.js` – resten.
+- `src/render.js`, `src/scenery.js`, `src/trees.js`, `src/sky.js`, `src/textures.js` – grafiken; `src/hud.js`, `src/audio.js`, `src/input.js`, `src/main.js` – resten.
 - `src/leaderboard.js` – topplistan: vanliga anrop mot Supabase REST med projektets publika nyckel, precis som cityguess gör.
 
 ## Köra lokalt

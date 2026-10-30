@@ -2,7 +2,7 @@
 
 Startpunkten för en ny Claude Code-session. Läs hela filen och sedan `docs/HANDOFF.md`.
 
-Senast uppdaterad 30 oktober 2026, version **1.1**: topplistan på nätet (Supabase). Version 1.0 var första racet Ekeby–Sjuby med tre valbara bilar och fem datorförare.
+Senast uppdaterad 30 oktober 2026, version **1.2**: detaljerade träd längs vägen och en lugn målgång (motorerna tystnar, glad melodi, lugn låt på resultatskärmen). Version 1.1 gav topplistan på nätet (Supabase), 1.0 var första racet Ekeby–Sjuby med tre valbara bilar och fem datorförare.
 
 ## 1. Projektet på en minut
 
@@ -35,6 +35,8 @@ python3 test/browser/full.py phone falk      # hela racet till resultatlistan
 python3 test/browser/views.py v 300 2600     # stora bilder från platser längs vägen (meter från start)
 python3 test/browser/studio.py car "car=lo&paint=orange&yaw=0.8"   # fotostudio för bilmodellerna (test/studio.html)
 python3 test/browser/board.py phone          # topplistan mot en låtsas-Supabase
+python3 test/browser/sound.py                # ljudet kring målgången, mätt med en analysator: "SOUND ok"
+PHONE=1 python3 test/browser/views.py t 1745 # telefonbilder från platser längs vägen
 ```
 
 - Webbläsartesterna kör Chromium med SwiftShader. `test/browser/cdn.py` serverar three.js från `node_modules` (sandlådan når inte jsDelivr).
@@ -55,10 +57,11 @@ python3 test/browser/board.py phone          # topplistan mot en låtsas-Supabas
 | `src/game.js` | Racet: startgrid, intro → nedräkning → race → mål, placeringar, `standings()`, fel håll, för långt ut, `resetPlayer()`. |
 | `src/ai.js` | Datorförarna (`RIVALS`, `Driver`): racinglinje, omkörningar, gummiband, respawn. |
 | `src/carmodel.js` | De realistiska bilarna: `BODIES` (profilkurvor per bil), `Body` (karossen), `Decals` (glas, lampor, galler, skarvar projicerade på ytan), hjulen, `CarModel` (en bil i scenen). |
-| `src/scenery.js` | Världens meshar: terrängen (band längs vägen + rutnät i bitar), vägen, bron, sjön, fälten, husen, träden (instansade i bitar), räcken, stolpar, skyltar, portalerna, publiken. |
+| `src/scenery.js` | Världens meshar: terrängen (band längs vägen + rutnät i bitar), vägen, bron, sjön, fälten, husen, träden (instansade i bitar), räcken, stolpar, skyltar, portalerna, publiken. Träd närmare vägen än `NEAR_TREE` (45 m) får de detaljerade modellerna i grupper om 120 m väg; inom `DETAIL_RANGE` (120 m) från kameran visas de detaljerade, annars de enkla (`update()` byter). |
+| `src/trees.js` | De detaljerade träden: gran, tall, björk (två varianter var). Stam och grenar som rör med barktextur, barr och löv målade på canvas och upphängda på kort (alpha-cut, belysta från båda sidor, gungar i vinden via `onBeforeCompile`). `test/treestudio.html` visar dem. |
 | `src/render.js` | Renderare, sol och skuggor, himmel och miljökarta, bilarna, partiklar, följekameran (`CameraRig`, GTA 7:s bilkamera). |
 | `src/sky.js`, `src/textures.js` | Himlen (och reflexerna) och alla canvas-texturer. |
-| `src/hud.js`, `src/audio.js`, `src/input.js` | HUD med minikarta, ljudet (motor med växlar), touch/tangentbord/handkontroll (tangenterna släpps igenom när man skriver i ett textfält). |
+| `src/hud.js`, `src/audio.js`, `src/input.js` | HUD med minikarta, ljudet (motor med växlar; `finish()` tystar motorerna och spelar målmelodin, `lounge(on)` den lugna låten på resultatskärmen, `reset()` vid nytt race), touch/tangentbord/handkontroll (tangenterna släpps igenom när man skriver i ett textfält). |
 | `src/leaderboard.js`, `supabase/` | Topplistan: `fetchTop(bil)`, `submit(...)`, `rankOf(tid, bil)`, `cleanName`; SQL för tabellen. |
 | `test/sim.mjs` | Node-testerna. Stilen `check(ok, 'beskrivning')`. |
 
@@ -69,4 +72,5 @@ python3 test/browser/board.py phone          # topplistan mot en låtsas-Supabas
 - Platta meshar (mark, väg, fält) vänds uppåt med `GB.faceUp()`; glöm inte det för nya.
 - **Bilarnas lack** använder vertexfärger (mörk undersida/hjulhus). Delar utan färgattribut ska ha `paint2` (annars blir de svarta).
 - **Slumpen:** `World` använder egna frön (`makeRng(2026)` m.fl.). Ändras ordningen flyttar sig hus och träd, och testerna kan behöva nya siffror.
-- **Prestanda:** varje bil är ~33 000 trianglar, träden ~70–90 var (instansade). Grafikvalen Snygg/Auto/Snabb finns i `QUALITY` i render.js; Auto sänker upplösningen och stänger av skuggor om bildfrekvensen faller.
+- **Prestanda:** varje bil är ~33 000 trianglar; de enkla träden ~70–90 var, de detaljerade 480–660. En bild med skuggor är ~550 000–820 000 trianglar och ~220–360 anrop (mätt med `renderer.info`). Bara de detaljerade träden kastar skuggor; skuggrutan är ±58 m och ligger lite framför bilen. Grafikvalen Snygg/Auto/Snabb finns i `QUALITY` i render.js; Snabb stänger av de detaljerade träden, Auto sänker upplösningen och stänger av skuggor om bildfrekvensen faller.
+- **Ljudet efter målgången:** allt kontinuerligt (motorer, vind, däck, grus) tonas ut när `audio.calm` är satt. Glöm inte `audio.reset()` när ett nytt race startar.

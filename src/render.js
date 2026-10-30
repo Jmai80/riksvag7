@@ -11,9 +11,9 @@ const HAZE = 0xc6d3dc;
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 export const QUALITY = {
-  pretty: { dpr: 2, shadow: 2048, trees: 1, far: 1300 },
-  auto: { dpr: 1.5, shadow: 1024, trees: 1, far: 1100 },
-  saver: { dpr: 1, shadow: 0, trees: 0.55, far: 800 },
+  pretty: { dpr: 2, shadow: 2048, trees: 1, hd: true, far: 1300 },
+  auto: { dpr: 1.5, shadow: 1024, trees: 1, hd: true, far: 1100 },
+  saver: { dpr: 1, shadow: 0, trees: 0.55, hd: false, far: 800 },
 };
 
 export class View {
@@ -38,14 +38,14 @@ export class View {
     sun.castShadow = true;
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
     const sc = sun.shadow.camera;
-    sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 400;
+    sc.left = -58; sc.right = 58; sc.top = 58; sc.bottom = -58; sc.near = 10; sc.far = 400;
     this.scene.add(sun, sun.target);
     this.hemi = new THREE.HemisphereLight(0xbfd4f0, 0x5a5640, 0.55);
     this.scene.add(this.hemi);
 
     this.quality = quality;
     this.applyQuality(quality, true);
-    this.scenery = new Scenery(track, world, { trees: QUALITY[quality].trees });
+    this.scenery = new Scenery(track, world, { trees: QUALITY[quality].trees, hdTrees: QUALITY[quality].hd });
     this.scene.add(this.scenery.group);
 
     // blob shadows under the cars (always on, also when the shadow map is off)
@@ -136,11 +136,12 @@ export class View {
     this.time += dt;
     this.sky.material.uniforms.uTime.value = this.time;
     if (game) { this.syncCars(dt); this.syncFx(game, dt); }
-    this.scenery.update(this.time, game);
-    // the sun's shadow box follows the camera's target
-    const f = this.rig.look;
+    this.scenery.update(this.time, game, this.camera.position);
+    // the sun's shadow box follows the camera's target, reaching a little further ahead
+    const f = this.rig.look, cp = this.camera.position;
+    const fx = f.x - cp.x, fz = f.z - cp.z, fl = Math.hypot(fx, fz) || 1;
     const step = 2;
-    const cx = Math.round(f.x / step) * step, cz = Math.round(f.z / step) * step;
+    const cx = Math.round((f.x + (fx / fl) * 22) / step) * step, cz = Math.round((f.z + (fz / fl) * 22) / step) * step;
     this.sun.target.position.set(cx, f.y, cz);
     this.sun.position.set(cx + SUN_DIR.x * 200, f.y + SUN_DIR.y * 200, cz + SUN_DIR.z * 200);
     this.sky.position.copy(this.camera.position);

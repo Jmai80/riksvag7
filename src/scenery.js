@@ -4,6 +4,10 @@ import * as THREE from './three.js';
 import { HW, SHOULDER, WATER, LAKE, fbm, smoothstep } from './track.js';
 import { makeRng, clamp } from './rng.js';
 import * as TX from './textures.js';
+import { makeTreeKit } from './trees.js';
+
+export const NEAR_TREE = 45;   // trees closer than this to the road get the detailed models (trees.js)
+const DETAIL_RANGE = 120;       // … when the camera is within this distance of their group
 
 const P = {}, Q = {};
 
@@ -72,6 +76,7 @@ export class Scenery {
     this.T = track; this.W = world;
     this.group = new THREE.Group();
     this.dense = opts.trees ?? 1;
+    this.hd = opts.hdTrees ?? true;
     this.tex = {
       grass: TX.grassTexture(), road: TX.roadTexture(), gravel: TX.gravelTexture(), siding: TX.sidingTexture(),
       plaster: TX.plasterTexture(), roof: TX.roofTexture(), window: TX.windowTexture(), shop: TX.shopTexture(), door: TX.doorTexture(),
@@ -598,32 +603,60 @@ export class Scenery {
   // ---------------------------------------------------------------- trees (instanced, in chunks)
   buildTrees() {
     const geos = { spruce: spruceGeo(), pine: pineGeo(), birch: birchGeo() };
+    const kit = this.hd ? (this.treeKit = makeTreeKit()) : null;
     const chunks = new Map();
     const keep = this.dense;
+    const NEAR = { s: 0, d: 0, i: 0, dist: 0 };
     this.W.trees.forEach((t, i) => {
       if (keep < 1 && (i % 100) / 100 >= keep && t.d > 25) return;
-      const k = `${t.type}:${Math.floor(t.z / 260)}:${Math.floor(t.x / 400)}`;
+      const hd = kit && t.d < NEAR_TREE;
+      // detailed trees in small groups along the road (so the camera and the sun's shadow only draw
+      // the ones near them); the rest in big blocks
+      let k;
+      if (hd) { const ci = Math.floor((this.T.nearest(t.x, t.z, NEAR) ? NEAR.s : 0) / 120); k = `${t.type}:${1 + (ci % 2)}:${ci}`; }
+      else k = `${t.type}:0:${Math.floor(t.z / 260)}:${Math.floor(t.x / 400)}`;
       if (!chunks.has(k)) chunks.set(k, []);
       chunks.get(k).push(t);
     });
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
     this.treeMeshes = [];
-    for (const [k, list] of chunks) {
-      const type = k.split(':')[0];
-      const im = new THREE.InstancedMesh(geos[type], this.mats.foliage, list.length);
+    this.treeLods = [];
+    const fill = (im, list, tint, sink) => {
       list.forEach((t, i) => {
         e.set(0, t.r, 0); q.setFromEuler(e);
         const s = t.s;
-        v.set(t.x, t.y - 0.25, t.z); sc.set(s, s * (0.9 + (t.r % 0.3)), s);
+        v.set(t.x, t.y - sink, t.z); sc.set(s, s * (0.9 + (t.r % 0.3)), s);
         m4.compose(v, q, sc);
         im.setMatrixAt(i, m4);
-        const h = 0.85 + ((t.r * 1000) % 1) * 0.3;
-        c.setRGB(h, h * (0.95 + (t.r % 0.1)), h * 0.9);
-        im.setColorAt(i, c);
+        if (tint) {
+          const h = 0.85 + ((t.r * 1000) % 1) * 0.3;
+          c.setRGB(h, h * (0.95 + (t.r % 0.1)), h * 0.9);
+          im.setColorAt(i, c);
+        }
       });
       im.computeBoundingSphere();
-      this.add(im, { cast: true, receive: false });
       this.treeMeshes.push(im);
+    };
+    for (const [k, list] of chunks) {
+      const [type, variant] = k.split(':');
+      const simple = new THREE.InstancedMesh(geos[type], this.mats.foliage, list.length);
+      fill(simple, list, true, 0.25);
+      // only the detailed trees by the road cast shadows (the sun's shadow only covers the road
+      // around the car anyway; the big blocks further out would cost a lot for nothing)
+      this.add(simple, { cast: false, receive: false });
+      if (variant === '0') continue;
+      // the detailed roadside tree: bark and foliage, both casting shadows. Close to the camera it
+      // replaces the simple one (update() swaps them by distance)
+      const G = kit.geos[type][Number(variant) - 1], M = kit.mats[type];
+      const tr = new THREE.InstancedMesh(G.trunk, M.trunk, list.length);
+      fill(tr, list, false, 0);
+      this.add(tr, { cast: true, receive: true });
+      const cr = new THREE.InstancedMesh(G.crown, M.crown, list.length);
+      fill(cr, list, true, 0);
+      this.add(cr, { cast: true, receive: false });
+      const bs = cr.boundingSphere;
+      this.treeLods.push({ center: bs.center.clone(), r: bs.radius, simple, detail: [tr, cr] });
+      tr.visible = cr.visible = false;
     }
     // rocks
     if (this.W.rocks.length) {
@@ -841,7 +874,13 @@ export class Scenery {
     for (const im of this.crowd) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
   }
 
-  update(t, game) {
+  update(t, game, camPos) {
+    if (this.treeKit) this.treeKit.time.value = t;
+    // detailed trees near the camera, simple ones further away
+    if (camPos) for (const L of this.treeLods) {
+      const near = L.center.distanceTo(camPos) - L.r < DETAIL_RANGE;
+      L.simple.visible = !near; L.detail[0].visible = L.detail[1].visible = near;
+    }
     for (const f of this.flags || []) { f.rotation.y = 0.6 + Math.sin(t * 0.8 + f.userData.phase) * 0.35; f.rotation.x = Math.sin(t * 2.3 + f.userData.phase) * 0.05; }
     if (this.water) this.waterMat.normalMap.offset.set(t * 0.006, t * 0.004);
     if (game && this.startLights.length) {

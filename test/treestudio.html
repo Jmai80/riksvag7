@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// The roadside trees on a lawn: ?yaw=0.5&dist=22&h=6&ty=6&w=1200&hgt=700
+import * as THREE from '../src/three.js';
+import { makeTreeKit, treeStats } from '../src/trees.js';
+import { makeSky, makeEnvironment, SUN_DIR } from '../src/sky.js';
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') || 1200), H = +(q.get('hgt') || 700);
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+r.setSize(W, H); r.setPixelRatio(1);
+r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
+const scene = new THREE.Scene();
+scene.environment = makeEnvironment(r); scene.environmentIntensity = 0.85;
+scene.add(makeSky());
+scene.fog = new THREE.Fog(0xc6d3dc, 180, 1100);
+const sun = new THREE.DirectionalLight(0xfff0dc, 2.7);
+sun.position.copy(SUN_DIR).multiplyScalar(60); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25, near: 1, far: 150 });
+sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
+scene.add(sun, new THREE.HemisphereLight(0xbfd4f0, 0x5a5640, 0.55));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x4a5a2a }));
+ground.receiveShadow = true; scene.add(ground);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(10, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x45474a }));
+road.position.set(-9, 0.02, 0); road.receiveShadow = true; scene.add(road);
+const kit = makeTreeKit();
+kit.time.value = 1.3;
+const place = [['spruce', 0, 0, 0], ['spruce', 1, 6, -7], ['pine', 0, 3, 7], ['pine', 1, 10, 2], ['birch', 0, -1, -10], ['birch', 1, 9, -14], ['spruce', 0, 14, 9]];
+for (const [type, v, x, z] of place) {
+  const G = kit.geos[type][v], M = kit.mats[type];
+  for (const [g, m] of [[G.trunk, M.trunk], [G.crown, M.crown]]) { const me = new THREE.Mesh(g, m); me.position.set(x, 0, z); me.rotation.y = x * 0.7; me.castShadow = true; me.receiveShadow = m === M.trunk; scene.add(me); }
+}
+const yaw = +(q.get('yaw') || 0.5), dist = +(q.get('dist') || 26), ch = +(q.get('h') || 4), ty = +(q.get('ty') || 6);
+const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 50), W / H, 0.1, 3000);
+cam.position.set(Math.sin(yaw) * dist + 4, ch, Math.cos(yaw) * dist);
+cam.lookAt(4, ty, 0);
+r.render(scene, cam);
+window.__stats = treeStats(kit);
+window.__ready = true;
+</script></body></html>

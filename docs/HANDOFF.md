@@ -1,6 +1,6 @@
 # Riksväg 7 – överlämning
 
-Senast uppdaterad 30 oktober 2026 (version 1.1).
+Senast uppdaterad 30 oktober 2026 (version 1.2).
 
 ## 1. Vad som finns
 
@@ -48,19 +48,28 @@ Med autopilot på egen hand är tiderna ungefär 2:15 / 2:11 / 2:08.
 - Resultatskärmen: namnfält (namnet sparas i inställningarna), **SPARA TID** (en gång per race), meddelande med placeringen totalt och med bilen, länken **Visa topplistan**. Startsidan: knappen **TOPPLISTA**. Topplistan har flikar för alla bilar och varje bil, din sparade rad markeras. Namn skrivs ut som text (aldrig som HTML).
 - Spärren mot fusk är enkel: tiden måste vara rimlig. Den publika nyckeln står i koden (som i cityguess), så den som vill kan skicka en påhittad tid direkt till Supabase. Behövs mer skydd: en Edge Function som kontrollerar tiden, eller en sparad körning som spelas upp på servern.
 
-## 6. Tester
+## 6. Träden och målgångens ljud (v1.2)
+
+- **Träden** (`src/trees.js`): gran (två varianter, ~610–660 trianglar): stam, en inre kon av barr och grenvarv med 6–7 hängande grenar var (kort med barrtextur, böjda nedåt, lutade ±20–35° så att de syns från sidan) och en topp. Tall (~600–630): lutande stam, gråbrun nertill och orange upptill (vertexfärg över barktexturen), 10–12 grenar med barrtofsar (hälften liggande, hälften stående), torra grenstumpar. Björk (~480): böjd vit stam, svart vid foten, 6 grenar och 64 hängande lövkvistar i en äggformad krona.
+- Korten belyses med en normal som pekar ut från kronan (samma från båda sidor) – annars blir baksidorna mörka. Vinden: en liten svajning som växer med höjden, olika fas per träd.
+- Bara träd inom 45 m från vägen är detaljerade (~1 800 st). De ligger i grupper om 120 m väg och byts mot de enkla modellerna när kameran är längre bort än 120 m från gruppen.
+- **Målgången** (`src/audio.js`): `finish(vinst)` sätter `calm` – motorer, vind, däck och grus tonas ut på ~1 s – och spelar en glad melodi i C-dur (längre med klockspel vid vinst). Resultatskärmen startar `lounge(true)`: Cmaj7–Am7–Fmaj7–G6 i 76 bpm, mjuka ackord, bas och en gles melodi, på en egen buss som tonas ut när man lämnar skärmen. `reset()` vid nytt race eller meny.
+
+## 7. Tester
 
 - `npm test` (`test/sim.mjs`): vägen, världen (inget på vägen), bilarna (siffror, kontroller, sladd, gräs, krön), att man inte kan lämna bilen eller ta sig in i hus, hela racet med alla sex i mål, återställning, fel håll.
-- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py`, `board.py` (se CLAUDE.md). `npm test` testar också topplistans anrop mot en låtsasserver.
+- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py`, `board.py`, `sound.py` (se CLAUDE.md). `npm test` testar också topplistans anrop mot en låtsasserver.
 
-## 7. Idéer för nästa version
+## 8. Idéer för nästa version
 
 - Fler banor (en kustväg, en kvällsetapp med strålkastare), varv på en rundbana.
 - Tidskörning mot ett "spöke" av ditt bästa lopp.
 - Skador och smuts på lacken, regn.
 - Fler bilar eller uppgraderingar (som Lasses butik i GTA 7).
 
-## 8. Versionshistorik
+## 9. Versionshistorik
+
+- **1.2** (30 okt 2026): detaljerade, verklighetstrogna träd längs vägen (gran, tall, björk) med skuggor och vind; efter målgången tystnar motorerna (förut fortsatte motorljudet monotont), en glad målmelodi och sedan en lugn låt på resultatskärmen.
 
 - **1.1** (30 okt 2026): topplistan på nätet i Supabase-projektet cityguess (tabellen `riksvag7_highscores`), spara tid efter målgången, TOPPLISTA på startsidan, flikar per bil. Placeringen skrivs nu 3:e i stället för 3:a.
 

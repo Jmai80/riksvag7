@@ -10,7 +10,7 @@ const VOICE = {
 };
 
 export class AudioFX {
-  constructor() { this.ctx = null; this.muted = false; this.gear = 1; this.shiftT = 0; }
+  constructor() { this.ctx = null; this.muted = false; this.gear = 1; this.shiftT = 0; this.calm = false; this.music = null; }
 
   init() {
     if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume(); return; }
@@ -34,6 +34,10 @@ export class AudioFX {
     this.amb = this.loopNoise('lowpass', 500, 0.5);
     this.amb.gain.gain.value = 0.012;
     this.buildHorn();
+    // the music bus (the finish jingle and the calm tune on the results screen)
+    this.musicBus = ctx.createGain(); this.musicBus.gain.value = 0.9;
+    const warm = ctx.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 5200;
+    this.musicBus.connect(warm); warm.connect(this.master);
   }
 
   loopNoise(type, freq, q) {
@@ -116,9 +120,13 @@ export class AudioFX {
   update(dt, game, view) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    if (!game) {
-      this.eng.out.gain.setTargetAtTime(0, t, 0.1); this.rival.out.gain.setTargetAtTime(0, t, 0.1);
-      for (const n of [this.skid, this.wind, this.rumble]) n.gain.gain.setTargetAtTime(0, t, 0.1);
+    this.tickMusic();
+    if (!game || this.calm) {
+      // after the finish (and in the menus): the engines, the wind and the tyres fade away
+      const k = this.calm ? 0.45 : 0.1;
+      this.eng.out.gain.setTargetAtTime(0, t, k); this.rival.out.gain.setTargetAtTime(0, t, k);
+      for (const n of [this.skid, this.wind, this.rumble]) n.gain.gain.setTargetAtTime(0, t, k);
+      this.hornG.gain.setTargetAtTime(0, t, 0.05);
       return;
     }
     const car = game.player;
@@ -169,10 +177,102 @@ export class AudioFX {
   }
   land(impact) { if (impact > 1.5) { this.tone(55, 0.22, 'sine', Math.min(0.35, impact * 0.05), 0, 32); this.burst(Math.min(0.2, impact * 0.03), 400, 0.15, 'lowpass'); } }
   beep(go) { go ? (this.tone(880, 0.6, 'square', 0.08), this.tone(1760, 0.6, 'sine', 0.04)) : this.tone(440, 0.22, 'square', 0.07); }
-  fanfare(win) {
-    const notes = win ? [523, 659, 784, 1047, 784, 1047] : [523, 659, 784];
-    notes.forEach((f, i) => this.tone(f, 0.28, 'triangle', 0.09, i * 0.13));
+  // ---------------------------------------------------------------- music
+  // a soft synth note on the music bus: a sine with a little second harmonic (a gentle e-piano),
+  // or a bell (bright, quick decay), or a pad (slow swell)
+  note(freq, when, dur, vol, kind = 'piano', bus = this.musicBus) {
+    const ctx = this.ctx, t = Math.max(ctx.currentTime, when);
+    const g = ctx.createGain(); g.connect(bus);
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o1.frequency.value = freq; o2.frequency.value = freq * 2;
+    o1.connect(g); o2.connect(g2); g2.connect(g);
+    if (kind === 'pad') {
+      o1.type = 'triangle'; o2.type = 'sine'; g2.gain.value = 0.12; o2.detune.value = 6;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.9, dur * 0.4));
+      g.gain.setValueAtTime(vol, t + dur * 0.7); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.9);
+    } else if (kind === 'bell') {
+      o1.type = 'sine'; o2.type = 'sine'; o2.frequency.value = freq * 3.01; g2.gain.value = 0.35;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    } else if (kind === 'lead') {
+      o1.type = 'square'; o2.type = 'triangle'; g2.gain.value = 0.6;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600; g.disconnect(); g.connect(f); f.connect(bus);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.setValueAtTime(vol * 0.8, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    } else {
+      o1.type = 'sine'; o2.type = 'sine'; g2.gain.value = 0.25;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    }
+    o1.start(t); o2.start(t); o1.stop(t + dur + 1.0); o2.stop(t + dur + 1.0);
   }
+
+  // over the line: the engines go quiet and a happy little tune plays (a longer one for a win)
+  finish(win) {
+    if (!this.ctx) return;
+    this.calm = true;
+    this.horn(false);
+    const t = this.ctx.currentTime + 0.08, N = (m) => 440 * Math.pow(2, (m - 69) / 12);
+    // C major: G C E G – E G, the last note held over a full chord, a bell on top
+    const tune = win
+      ? [[67, 0, 0.13], [72, 0.13, 0.13], [76, 0.26, 0.13], [79, 0.39, 0.26], [76, 0.65, 0.13], [79, 0.78, 0.13], [84, 0.91, 0.9]]
+      : [[67, 0, 0.13], [72, 0.13, 0.13], [76, 0.26, 0.13], [79, 0.39, 0.26], [76, 0.65, 0.13], [79, 0.78, 0.7]];
+    for (const [m, at, d] of tune) { this.note(N(m), t + at, d, 0.07, 'lead'); this.note(N(m - 12), t + at, d, 0.035, 'piano'); }
+    const end = t + tune[tune.length - 1][1];
+    for (const m of [60, 64, 67, 72]) this.note(N(m), end, 1.6, 0.035, 'pad');
+    this.note(N(96), end + 0.02, 1.4, 0.03, 'bell'); this.note(N(91), end + 0.18, 1.2, 0.022, 'bell');
+    if (win) for (let k = 0; k < 6; k++) this.note(N([84, 88, 91, 96, 91, 96][k]), end + 0.35 + k * 0.09, 0.6, 0.016, 'bell');
+  }
+
+  // the calm tune under the results: soft chords, a slow bass and a sparse melody (C major, 76 bpm).
+  // Scheduled a little ahead in time from update().
+  lounge(on) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (on && !this.music) {
+      // its own little bus, so that stopping it also silences notes already on their way
+      const bus = this.ctx.createGain();
+      bus.gain.setValueAtTime(0.0001, t); bus.gain.linearRampToValueAtTime(1, t + 2.5);
+      bus.connect(this.musicBus);
+      this.music = { next: t + 0.5, step: 0, bus };
+    } else if (!on && this.music) {
+      const bus = this.music.bus;
+      this.music = null;
+      bus.gain.cancelScheduledValues(t); bus.gain.setTargetAtTime(0.0001, t, 0.3);
+      setTimeout(() => bus.disconnect(), 3000);
+    }
+  }
+
+  tickMusic() {
+    const M = this.music;
+    if (!M) return;
+    const ctx = this.ctx, N = (m) => 440 * Math.pow(2, (m - 69) / 12);
+    const beat = 60 / 76;
+    // four bars: Cmaj7 – Am7 – Fmaj7 – G6, then the same with a second melody
+    const chords = [[48, [60, 64, 67, 71]], [45, [57, 60, 64, 67]], [41, [57, 60, 64, 65]], [43, [59, 62, 64, 67]]];
+    const melodies = [
+      [76, null, 79, null, 76, 74, null, 72, null, null, 72, null, 69, null, 72, null],
+      [74, null, 72, 69, null, 72, null, null, 77, null, 76, null, 74, null, null, 71],
+      [72, null, null, 76, null, 79, null, 81, null, 79, null, 76, null, null, 74, null],
+      [71, null, 74, null, 79, null, null, 76, null, 74, null, null, 72, null, null, null],
+    ];
+    while (M.next < ctx.currentTime + 0.6) {
+      const s = M.step, bar = Math.floor(s / 4) % 4, beatInBar = s % 4, phrase = Math.floor(s / 16) % 2;
+      const [bass, chord] = chords[bar];
+      if (beatInBar === 0) {
+        for (const m of chord) this.note(N(m), M.next, beat * 4, 0.018, 'pad', M.bus);
+        this.note(N(bass), M.next, beat * 2.2, 0.05, 'piano', M.bus);
+      }
+      if (beatInBar === 2) this.note(N(bass + 7), M.next, beat * 1.8, 0.035, 'piano', M.bus);
+      // the melody in eighths
+      const mel = melodies[(bar + phrase * 2) % 4];
+      for (const half of [0, 1]) {
+        const m = mel[beatInBar * 2 + half];
+        if (m) this.note(N(m), M.next + half * beat / 2, beat * 1.4, 0.04, 'piano', M.bus);
+      }
+      M.step++; M.next += beat;
+    }
+  }
+
+  // a new race: the engines may come back
+  reset() { this.calm = false; this.lounge(false); }
   click() { this.tone(1200, 0.04, 'square', 0.03); }
   whoosh() { this.burst(0.12, 900, 0.35, 'bandpass'); }
 }

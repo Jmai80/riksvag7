@@ -12,7 +12,7 @@ import { CAR_TYPES, CAR_ORDER, PAINTS, zeroTo100, topSpeed } from './cars.js';
 import { smooth } from './rng.js';
 import { fetchTop, submit, rankOf, cleanName, MIN_MS, MAX_MS } from './leaderboard.js';
 
-export const VERSION = '1.1';
+export const VERSION = '1.2';
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 60;
 
@@ -96,6 +96,7 @@ function toSelect() {
 
 function endRace() {
   game = null; finishT = -1;
+  audio.reset();
   input.enabled = false; input.releaseAll();
   audio.horn(false);
 }
@@ -153,6 +154,7 @@ function startRace() {
   $('board').hidden = true;
   const type = settings.car, paint = settings.paint[type] || CAR_TYPES[type].paints[0];
   audio.init();
+  audio.reset();
   game = new Game({ track, world, carType: type, paint, settings });
   game.player.plate = 'RIK 007';
   view.setCars(game.vehicles);
@@ -180,7 +182,7 @@ function startRace() {
   game.on('rivalFinish', (e) => { if (!game.player.finished && e.pos === 1) hud.toast(`${e.car.name} gick i mål först!`, 2.2); });
   game.on('finish', (e) => {
     hud.banner('MÅL!', 'fin', 2.4);
-    audio.fanfare(e.pos === 1);
+    audio.finish(e.pos === 1);        // the engines fade, a happy little tune
     finishT = 2.6;
   });
 }
@@ -205,6 +207,7 @@ function showResults() {
   setSaveMsg(ok ? 'Spara tiden så syns den för alla som spelar.' : 'Den här tiden kan inte sparas i topplistan.', '');
   savedId = null;
   $('results').hidden = false;
+  audio.lounge(true);                 // a calm tune while you look at the time and save it
   input.enabled = false; input.releaseAll();
 }
 
@@ -423,7 +426,7 @@ function autoQuality(dt) {
 
 // for the browser tests
 window.__rv = {
-  get game() { return game; }, get state() { return state; }, get view() { return view; }, get track() { return track; }, get world() { return world; },
+  get game() { return game; }, get state() { return state; }, get audio() { return audio; }, get view() { return view; }, get track() { return track; }, get world() { return world; },
   settings, toSelect, startRace, pause, showResults, setCar: (t) => { settings.car = t; showPicker(); }, setPaint,
   smooth, openBoard, saveTime,
   // run the game for a while without drawing, then draw one frame (manual mode)

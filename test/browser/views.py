@@ -5,9 +5,10 @@ from playwright.async_api import async_playwright
 from cdn import route_cdn, ARGS
 async def main():
     tag = sys.argv[1]; spots = [float(x) for x in sys.argv[2:]]
+    phone = os.environ.get('PHONE') == '1'   # PHONE=1: 390×844 at 2× (for the screenshot sheet)
     async with async_playwright() as p:
         b = await p.chromium.launch(args=ARGS)
-        ctx = await b.new_context(viewport={'width': 1280, 'height': 720}, device_scale_factor=1)
+        ctx = await b.new_context(viewport={'width': 390, 'height': 844} if phone else {'width': 1280, 'height': 720}, device_scale_factor=2 if phone else 1, has_touch=phone, is_mobile=phone)
         await route_cdn(ctx)
         pg = await ctx.new_page()
         logs = []
