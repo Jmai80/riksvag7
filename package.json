@@ -1,0 +1,15 @@
+{
+  "name": "riksvag7",
+  "version": "1.0.0",
+  "description": "Riksväg 7 – ett racingspel i three.js, byggt för mobilen.",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node test/sim.mjs",
+    "start": "python3 -m http.server 8000"
+  },
+  "private": true,
+  "type": "module"
+}

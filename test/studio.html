@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// A photo studio for the car models: ?car=svala&paint=gul&yaw=0.6&pitch=0.25&dist=6.5&w=1200&h=700
+import * as THREE from '../src/three.js';
+import { CarModel, carStats } from '../src/carmodel.js';
+import { makeSky, makeEnvironment, SUN_DIR } from '../src/sky.js';
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') || 1200), H = +(q.get('h') || 700);
+const canvas = document.getElementById('c');
+const r = new THREE.WebGLRenderer({ canvas, antialias: true });
+r.setSize(W, H); r.setPixelRatio(1);
+r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.environment = makeEnvironment(r);
+scene.add(makeSky());
+const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
+sun.position.copy(SUN_DIR).multiplyScalar(30); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 80 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun, new THREE.HemisphereLight(0xbcd2ee, 0x4a4a3c, 0.35));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x55585c, roughness: 0.85 }));
+ground.receiveShadow = true; scene.add(ground);
+const cars = (q.get('car') || 'svala').split(',');
+const paints = (q.get('paint') || 'gul').split(',');
+const models = cars.map((c, i) => { const m = new CarModel(c, paints[i] || paints[0], 'RIK 007'); m.group.position.x = (i - (cars.length - 1) / 2) * 2.6; scene.add(m.group); return m; });
+const st = +(q.get('steer') || 0);
+models.forEach((m) => m.sync({ x: m.group.position.x, y: 0, z: 0, h: +(q.get('h0') || 0), steer: st, spin: 0.3, brakeLight: +(q.get('brake') || 0) }, 1));
+const yaw = +(q.get('yaw') || 0.7), pitch = +(q.get('pitch') || 0.22), dist = +(q.get('dist') || 6.8);
+const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 35), W / H, 0.1, 3000);
+const ty = +(q.get('ty') || 0.6);
+cam.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, ty + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+cam.lookAt(0, ty, 0);
+r.render(scene, cam);
+window.__stats = cars.map((c) => carStats(c));
+window.__ready = true;
+</script></body></html>
