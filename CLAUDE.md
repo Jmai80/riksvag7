@@ -66,7 +66,7 @@ python3 test/browser/compose.py ut.png 3 "test/shots/a.png|Bildtext" …   # ark
 | `src/render.js` | Renderare, sol och skuggor, himmel och miljökarta, bilarna, partiklar, följekameran (`CameraRig`, GTA 7:s bilkamera). |
 | `src/sky.js`, `src/textures.js` | Himlen (`MOODS`: dag och skymning, miljökarta per stämning) och alla canvas-texturer (bland annat tända fönster och ljuskäglor). |
 | `src/hud.js`, `src/audio.js`, `src/input.js` | HUD med minikarta, ljudet (motor med växlar; `finish()` tystar motorerna och spelar målmelodin, `lounge(on)` den lugna låten på resultatskärmen, `reset()` vid nytt race), touch/tangentbord/handkontroll (tangenterna släpps igenom när man skriver i ett textfält). |
-| `src/leaderboard.js`, `supabase/` | Topplistan: `fetchTop(bil)`, `submit(...)`, `rankOf(tid, bil)`, `cleanName`; SQL för tabellen. |
+| `src/leaderboard.js`, `supabase/` | Topplistan: `fetchTop(bana, bil)`, `submit({ …, track })`, `rankOf(tid, bana, bil)`, `cleanName`; SQL för tabellen. |
 | `test/sim.mjs` | Node-testerna. Stilen `check(ok, 'beskrivning')`. |
 
 ## 5. Fallgropar
