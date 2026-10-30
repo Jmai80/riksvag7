@@ -1,13 +1,19 @@
 // The view: renderer, light and shadows, the sky, the scenery, the cars and the chase camera.
 import * as THREE from './three.js';
-import { makeSky, makeEnvironment, SUN_DIR } from './sky.js';
+import { makeSky, makeEnvironment, setSkyMood, SUN_DIR } from './sky.js';
 import { Scenery } from './scenery.js';
-import { CarModel } from './carmodel.js';
+import { CarModel, carMaterials } from './carmodel.js';
 import { clamp, smooth, smoothAngle, wrapAngle } from './rng.js';
 import { blobTexture } from './textures.js';
 import { HW } from './track.js';
 
 const HAZE = 0xc6d3dc;
+// the light of each mood (the sky's own colours are in sky.js)
+const LIGHT = {
+  day: { sun: 0xfff0dc, sunI: 2.7, sunDir: SUN_DIR, shadows: true, sky: 0xbfd4f0, ground: 0x5a5640, hemiI: 0.55, env: 0.85, fog: HAZE, fogNear: 180, fogK: 1, exposure: 1.05, projector: 0 },
+  // just after sunset: no direct sun, the last warm light low in the south-west, a blue sky above
+  dusk: { sun: 0xff9e6e, sunI: 0.5, sunDir: new THREE.Vector3(-0.5, 0.22, -0.84).normalize(), shadows: false, sky: 0x6a7cb0, ground: 0x1e1a16, hemiI: 0.5, env: 0.55, fog: 0x343852, fogNear: 50, fogK: 0.6, exposure: 1.2, projector: 3 },
+};
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 export const QUALITY = {
@@ -44,6 +50,7 @@ export class View {
     this.scene.add(this.hemi);
 
     this.quality = quality;
+    this.mood = 'day';
     this.applyQuality(quality, true);
     this.scenery = new Scenery(track, world, { trees: QUALITY[quality].trees, hdTrees: QUALITY[quality].hd });
     this.scene.add(this.scenery.group);
@@ -62,12 +69,46 @@ export class View {
     const Q = QUALITY[q];
     this.dprMax = Q.dpr;
     this.setDpr(Math.min(window.devicePixelRatio || 1, Q.dpr));
-    this.sun.castShadow = Q.shadow > 0;
+    this.sun.castShadow = Q.shadow > 0 && (!this.mood || LIGHT[this.mood].shadows);
     if (Q.shadow) { this.sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
     this.camera.far = Q.far + 1200;
-    this.scene.fog.far = Q.far;
+    this.scene.fog.far = Q.far * (this.mood ? LIGHT[this.mood].fogK : 1);
     this.camera.updateProjectionMatrix();
     if (!first && this.scenery) for (const m of this.scenery.treeMeshes) m.visible = true;
+  }
+
+  // day or dusk: the sky, its reflections, the light, the fog, and every lamp in the world
+  setMood(mood) {
+    if (mood === this.mood) return;
+    this.mood = mood;
+    const L = LIGHT[mood];
+    setSkyMood(this.sky.material, mood);
+    this.scene.environment = makeEnvironment(this.renderer, mood);
+    this.scene.environmentIntensity = L.env;
+    this.sun.color.setHex(L.sun); this.sun.intensity = L.sunI;
+    this.hemi.color.setHex(L.sky); this.hemi.groundColor.setHex(L.ground); this.hemi.intensity = L.hemiI;
+    this.scene.fog.color.setHex(L.fog); this.scene.fog.near = L.fogNear;
+    this.renderer.toneMappingExposure = L.exposure;
+    this.applyQuality(this.quality);
+    const night = mood !== 'day';
+    this.scenery.setNight(night);
+    const M = carMaterials();
+    M.projector.emissive.setHex(night ? 0xfff2d8 : 0x000000); M.projector.emissiveIntensity = L.projector;
+    M.drl.emissiveIntensity = night ? 3.2 : 2.2;
+    for (const [, c] of this.cars) c.model.setNight(night);
+    // the player's own headlamps light the road, the trees and the houses
+    if (night && !this.headSpot) {
+      const sp = (this.headSpot = new THREE.SpotLight(0xfff1dd, 160, 150, 0.5, 0.6, 1.4));
+      sp.position.set(0, 0.8, 2.2); sp.target.position.set(0, 0, 30); sp.castShadow = false;
+    }
+    if (this.headSpot) this.headSpot.visible = night;
+  }
+
+  // the headlamp spot rides on the player's car
+  attachHeadlights(v) {
+    if (!this.headSpot) return;
+    const c = this.cars.get(v);
+    if (c && this.headSpot.parent !== c.model.group) { c.model.group.add(this.headSpot, this.headSpot.target); }
   }
 
   setDpr(d) { this.dpr = d; this.renderer.setPixelRatio(d); this.resize(); }
@@ -81,7 +122,10 @@ export class View {
 
   // the cars of a race (or the showroom car)
   setCars(list) {
-    for (const [v, c] of this.cars) if (!list.includes(v)) { this.scene.remove(c.model.group, c.blob); c.model.dispose(); this.cars.delete(v); }
+    for (const [v, c] of this.cars) if (!list.includes(v)) {
+      if (this.headSpot && this.headSpot.parent === c.model.group) { c.model.group.remove(this.headSpot, this.headSpot.target); }
+      this.scene.remove(c.model.group, c.blob); c.model.dispose(); this.cars.delete(v);
+    }
     list.forEach((v, i) => {
       if (this.cars.has(v)) return;
       const plate = v.plate || ['RIK 007', 'TRB 777', 'SNB 412', 'KRV 305', 'RLY 230', 'GAS 909'][i % 6];
@@ -89,6 +133,7 @@ export class View {
       const blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.blobMat);
       blob.renderOrder = 2;
       this.scene.add(model.group, blob);
+      if (this.mood !== 'day') model.setNight(true);
       this.cars.set(v, { model, blob });
     });
   }
@@ -142,8 +187,9 @@ export class View {
     const fx = f.x - cp.x, fz = f.z - cp.z, fl = Math.hypot(fx, fz) || 1;
     const step = 2;
     const cx = Math.round((f.x + (fx / fl) * 22) / step) * step, cz = Math.round((f.z + (fz / fl) * 22) / step) * step;
+    const D = LIGHT[this.mood].sunDir;
     this.sun.target.position.set(cx, f.y, cz);
-    this.sun.position.set(cx + SUN_DIR.x * 200, f.y + SUN_DIR.y * 200, cz + SUN_DIR.z * 200);
+    this.sun.position.set(cx + D.x * 200, f.y + D.y * 200, cz + D.z * 200);
     this.sky.position.copy(this.camera.position);
   }
 

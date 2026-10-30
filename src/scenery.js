@@ -89,8 +89,8 @@ export class Scenery {
       plaster: new THREE.MeshLambertMaterial({ map: this.tex.plaster, vertexColors: true }),
       roof: new THREE.MeshLambertMaterial({ map: this.tex.roof, vertexColors: true }),
       plain: new THREE.MeshLambertMaterial({ vertexColors: true }),
-      window: new THREE.MeshStandardMaterial({ map: this.tex.window, roughness: 0.15, metalness: 0.0, envMapIntensity: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      shop: new THREE.MeshStandardMaterial({ map: this.tex.shop, roughness: 0.15, metalness: 0.0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      window: new THREE.MeshStandardMaterial({ map: this.tex.window, roughness: 0.15, metalness: 0.0, envMapIntensity: 0.9, emissive: 0xffffff, emissiveMap: TX.windowGlowTexture(), emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      shop: new THREE.MeshStandardMaterial({ map: this.tex.shop, roughness: 0.15, metalness: 0.0, emissive: 0xffffff, emissiveMap: TX.shopGlowTexture(), emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       door: new THREE.MeshLambertMaterial({ map: this.tex.door, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       steel: new THREE.MeshStandardMaterial({ color: 0xb9bdc1, roughness: 0.42, metalness: 0.75, vertexColors: true, side: THREE.DoubleSide }),
       concrete: new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
@@ -721,8 +721,17 @@ export class Scenery {
     lampG.box((x, y, z) => [x, y, z], -0.07, 0, -0.07, 0.07, 7.6, 0.07, gray);
     lampG.box((x, y, z) => [x, y, z], -0.04, 7.45, -0.04, 1.6, 7.55, 0.04, gray);
     lampG.box((x, y, z) => [x, y, z], 1.2, 7.3, -0.15, 2.0, 7.48, 0.15, [0.3, 0.31, 0.33]);
-    lampG.box((x, y, z) => [x, y, z], 1.25, 7.27, -0.12, 1.95, 7.3, 0.12, [0.95, 0.95, 0.9]);
     inst(lampG.geometry(), this.mats.plain, W.lamps, (l, m) => place(l.x, l.y - 0.1, l.z, l.h));
+    const headG = new GB();
+    headG.box((x, y, z) => [x, y, z], 1.25, 7.25, -0.12, 1.95, 7.3, 0.12, [1, 1, 1], 0, true);
+    this.lampMat = new THREE.MeshStandardMaterial({ color: 0xf0f0ea, emissive: 0xffdca8, emissiveIntensity: 0, roughness: 0.3 });
+    inst(headG.geometry(), this.lampMat, W.lamps, (l, m) => place(l.x, l.y - 0.1, l.z, l.h), { cast: false });
+    const poolMat = new THREE.MeshBasicMaterial({ map: TX.lightPoolTexture(false), color: 0xffcf8a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+    this.lampPools = inst(new THREE.PlaneGeometry(15, 15).rotateX(-Math.PI / 2), poolMat, W.lamps, (l, m) => {
+      const x = l.x + Math.cos(l.h) * 1.6, z = l.z - Math.sin(l.h) * 1.6;
+      return place(x, this.T.height(x, z) + 0.08, z, 0);
+    }, { cast: false, receive: false });
+    if (this.lampPools) { this.lampPools.visible = false; this.lampPools.renderOrder = 3; }
 
     // the power line: wooden poles with a crossarm, three sagging wires
     const poleG = new GB();
@@ -753,7 +762,8 @@ export class Scenery {
     }
 
     // signs
-    const signPost = new GB();
+    this.courseSigns = {};
+    const signPost = new GB(), coursePosts = {};
     for (const s of W.signs) {
       const tex = TX.signTexture(s.kind, s.text);
       const wide = ['town', 'distance', 'lake', 'board'].includes(s.kind);
@@ -763,13 +773,16 @@ export class Scenery {
       face.position.set(s.x, s.y + hgt + sh / 2, s.z);
       face.rotation.y = s.h;
       this.add(face);
-      const back = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshLambertMaterial({ color: 0x8c9196 }));
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), s.back ? new THREE.MeshLambertMaterial({ map: TX.signTexture('chevron', s.back) }) : new THREE.MeshLambertMaterial({ color: 0x8c9196 }));
       back.position.copy(face.position); back.rotation.y = s.h + Math.PI;
       if (s.kind !== 'speed') this.add(back);
+      if (s.course) { (this.courseSigns[s.course] || (this.courseSigns[s.course] = [])).push(face, back); }
       const posts = wide ? [-sw * 0.35, sw * 0.35] : [0];
-      for (const px of posts) signPost.box(frame(s.h, s.x, s.y - 0.2, s.z), px - 0.04, 0, -0.06, px + 0.04, hgt + sh, -0.02, [0.55, 0.57, 0.6]);
+      const pg = s.course ? (coursePosts[s.course] || (coursePosts[s.course] = new GB())) : signPost;
+      for (const px of posts) pg.box(frame(s.h, s.x, s.y - 0.2, s.z), px - 0.04, 0, -0.06, px + 0.04, hgt + sh, -0.02, [0.55, 0.57, 0.6]);
     }
     this.add(new THREE.Mesh(signPost.geometry(), this.mats.plain), { cast: true });
+    for (const c in coursePosts) this.courseSigns[c].push(this.add(new THREE.Mesh(coursePosts[c].geometry(), this.mats.plain), { cast: true }));
 
     // Swedish flags on poles at some houses (the cloth sways in update())
     this.flags = [];
@@ -793,7 +806,15 @@ export class Scenery {
   // ---------------------------------------------------------------- start and finish
   buildGantries() {
     const T = this.T;
-    this.startLights = [];
+    this.startLights = { 1: [], 2: [] };
+    this.banners = [];
+    // course 1 starts at the Ekeby gantry and finishes at the Sjuby one; course 2 starts in Sjuby and
+    // finishes under its own gantry a little further into Ekeby
+    const texts = {
+      start: { 1: ['RIKSVÄG 7 · START', false], 2: ['EKEBY CENTRUM', false] },
+      finish: { 1: ['MÅL · SJUBY', true], 2: ['KVÄLLSRACET · START', false] },
+      goal2: { 1: ['LYCKA TILL!', false], 2: ['MÅL · EKEBY', true] },
+    };
     for (const gn of this.W.gantries) {
       const g = new GB();
       const tf = frame(gn.h, gn.x, gn.y, gn.z);
@@ -806,29 +827,32 @@ export class Scenery {
       }
       g.box(tf, -sx - 0.35, 6.0, -0.4, sx + 0.35, 7.6, 0.4, dark);
       this.add(new THREE.Mesh(g.geometry(), this.mats.plain), { cast: true });
-      const banner = TX.bannerTexture(gn.kind === 'start' ? 'RIKSVÄG 7 · START' : 'MÅL · SJUBY', gn.kind === 'finish');
+      const tx = { 1: TX.bannerTexture(...texts[gn.kind][1]), 2: TX.bannerTexture(...texts[gn.kind][2]) };
       for (const side of [1, -1]) {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(sx * 2 - 0.8, 1.3), new THREE.MeshLambertMaterial({ map: banner }));
+        const mat = new THREE.MeshStandardMaterial({ map: tx[1], emissive: 0xffffff, emissiveMap: tx[1], emissiveIntensity: 0, roughness: 0.8 });
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(sx * 2 - 0.8, 1.3), mat);
         const [x, y, z] = tf(0, 6.8, side * 0.42);
         m.position.set(x, y, z);
         m.rotation.y = gn.h + (side > 0 ? 0 : Math.PI);
         this.add(m);
+        this.banners.push({ mat, tx });
       }
-      if (gn.kind === 'start') {
-        // three start lamps on the beam, facing the grid (behind the line)
-        for (let k = 0; k < 4; k++) {
-          const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: 0x000000, emissiveIntensity: 3, roughness: 0.3 });
-          const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.12, 20).rotateX(Math.PI / 2), mat);
-          const [x, y, z] = tf(-1.8 + k * 1.2, 5.5, -0.45);
-          lamp.position.set(x, y, z); lamp.rotation.y = gn.h;
-          const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.3), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-          box.position.set(...tf(-1.8 + k * 1.2, 5.5, -0.3)); box.rotation.y = gn.h;
-          this.add(box); this.add(lamp);
-          this.startLights.push(mat);
-        }
-        void T;
+      // start lamps on the beam, facing the grid behind the line (the grid of course 1 lies before
+      // the Ekeby gantry, the grid of course 2 beyond the Sjuby one)
+      if (gn.kind === 'goal2') continue;
+      const course = gn.kind === 'start' ? 1 : 2, face = course === 1 ? -1 : 1;
+      for (let k = 0; k < 4; k++) {
+        const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: 0x000000, emissiveIntensity: 3, roughness: 0.3 });
+        const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.12, 20).rotateX(Math.PI / 2), mat);
+        const [x, y, z] = tf(-1.8 + k * 1.2, 5.5, face * 0.45);
+        lamp.position.set(x, y, z); lamp.rotation.y = gn.h;
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.3), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+        box.position.set(...tf(-1.8 + k * 1.2, 5.5, face * 0.3)); box.rotation.y = gn.h;
+        this.add(box); this.add(lamp);
+        this.startLights[course].push(mat);
       }
     }
+    this.setCourse(1);
     // the crowd barriers (red and white)
     const bg = new GB();
     for (const br of this.W.barriers || []) {
@@ -862,6 +886,23 @@ export class Scenery {
     this.updateCrowd(0);
   }
 
+  // the evening: street lights and windows on, banners lit
+  setNight(on) {
+    this.night = on;
+    this.lampMat.emissiveIntensity = on ? 3.2 : 0;
+    if (this.lampPools) this.lampPools.visible = on;
+    this.mats.window.emissiveIntensity = on ? 1.25 : 0;
+    this.mats.shop.emissiveIntensity = on ? 1.1 : 0;
+    for (const b of this.banners) b.mat.emissiveIntensity = on ? 0.55 : 0;
+  }
+
+  // which race is on: the banners, the course's own boards
+  setCourse(id) {
+    this.course = id;
+    for (const b of this.banners) { b.mat.map = b.tx[id]; b.mat.emissiveMap = b.tx[id]; b.mat.needsUpdate = true; }
+    for (const c in this.courseSigns) for (const m of this.courseSigns[c]) m.visible = Number(c) === id;
+  }
+
   updateCrowd(t) {
     if (!this.crowd) return;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -883,9 +924,9 @@ export class Scenery {
     }
     for (const f of this.flags || []) { f.rotation.y = 0.6 + Math.sin(t * 0.8 + f.userData.phase) * 0.35; f.rotation.x = Math.sin(t * 2.3 + f.userData.phase) * 0.05; }
     if (this.water) this.waterMat.normalMap.offset.set(t * 0.006, t * 0.004);
-    if (game && this.startLights.length) {
+    if (game) {
       const L = game.lights;
-      this.startLights.forEach((m, k) => {
+      this.startLights[this.course || 1].forEach((m, k) => {
         const on = L >= 4 ? true : L > k && k < 3;
         const green = L >= 4;
         m.emissive.setHex(on ? (green ? 0x22ff44 : 0xff1a10) : 0x000000);

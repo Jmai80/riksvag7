@@ -25,3 +25,11 @@ create policy "Alla kan spara en tid"
   with check (true);
 
 grant select, insert on public.riksvag7_highscores to anon, authenticated;
+
+-- v1.3: which course the time was driven on (1 = Ekeby → Sjuby, 2 = Kvällsracet Sjuby → Ekeby).
+-- Rows from before get 1.
+alter table public.riksvag7_highscores
+  add column track smallint not null default 1 check (track between 1 and 99);
+
+create index riksvag7_highscores_track_time_idx
+  on public.riksvag7_highscores (track, time_ms);

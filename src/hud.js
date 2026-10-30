@@ -56,7 +56,7 @@ export class Hud {
   toast(text, dur = 2.4) { const t = this.el.toast; t.textContent = text; t.hidden = false; this.toastT = dur; }
 
   update(dt, game, view) {
-    const p = game.player, T = this.track;
+    const p = game.player, T = game.track;     // the course (either direction)
     // time and position
     const racing = game.phase === 'race' || game.phase === 'done';
     this.el.time.textContent = racing ? fmtTime(p.finished ? p.finishTime : game.raceTime) : '0:00.0';
@@ -122,8 +122,8 @@ export class Hud {
     draw((HW * 2 + 6) * scale, 'rgba(255,255,255,0.85)');
     draw(HW * 2 * scale, '#3b3f45');
     // start and finish lines
-    for (const s of [this.track.zones.finish]) {
-      const q = this.track.pointAt(s, {});
+    for (const s of [game.track.zones.finish]) {
+      const q = game.track.pointAt(s, {});
       const [u, v] = tx(q.x, q.z);
       g.fillStyle = '#ffcf33'; g.beginPath(); g.arc(u, v, 6 * dpr, 0, 7); g.fill();
     }

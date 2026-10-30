@@ -6,6 +6,7 @@
 // callipers. Paint, chrome and glass are physically based and reflect the sky.
 import * as THREE from './three.js';
 import { CAR_TYPES, PAINTS } from './cars.js';
+import { lightPoolTexture, glowTexture } from './textures.js';
 
 // ------------------------------------------------------------------ small math helpers
 function pchip(table) {
@@ -666,7 +667,11 @@ function buildType(type) {
     const tilt = z2 !== null && z3 !== null ? Math.atan2(z2 - z3, 0.08) : 0;
     return { x: pp[0], y: pp[1], z: (z ?? 0) + dir * 0.012, tilt, dir };
   };
+  const centre = (poly) => [poly.reduce((a, p) => a + p[0], 0) / poly.length, poly.reduce((a, p) => a + p[1], 0) / poly.length];
+  const [hx, hy] = centre(B.head), [tx, ty] = centre(B.tail);
+  const lamps = { head: [hx, hy, (body.endZ(hx, hy, 1) ?? body.zF) + 0.06], tail: [tx, ty, (body.endZ(tx, ty, -1) ?? body.zR) - 0.05] };
   const data = {
+    lamps,
     body, paintGeo, decalMeshes, mirrors, spoilerGeos, exh, tailMat,
     plates: [plateAt(B.plateF, 1), plateAt(B.plateR, -1)],
     wheel: buildWheel(type, B, S),
@@ -745,6 +750,7 @@ function buildWheel(type, B, S) {
 
 // ------------------------------------------------------------------ one car on the road
 const tmpE = new THREE.Euler();
+let POOL_TEX = null, GLOW_TEX = null;
 export class CarModel {
   constructor(type, paintKey, plate = 'RVG 007') {
     const T = buildType(type), M = carMaterials();
@@ -804,8 +810,31 @@ export class CarModel {
     this.roll = 0; this.pitch = 0;
   }
 
+  // the evening: a pool of light on the road ahead, glare round the headlamps and the tail lamps
+  setNight(on) {
+    this.night = on;
+    if (on && !this.nightParts) {
+      const T = buildType(this.type), [hx, hy, hz] = T.lamps.head, [tx, ty, tz] = T.lamps.tail;
+      POOL_TEX = POOL_TEX || lightPoolTexture(true); GLOW_TEX = GLOW_TEX || glowTexture();
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(10, 30).rotateX(Math.PI / 2).translate(0, 0.07, 2 + 15), new THREE.MeshBasicMaterial({ map: POOL_TEX, color: 0xffe2c0, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+      pool.renderOrder = 3;
+      this.group.add(pool);
+      const head = new THREE.SpriteMaterial({ map: GLOW_TEX, color: 0xfff1da, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+      this.tailGlow = new THREE.SpriteMaterial({ map: GLOW_TEX, color: 0xff2a14, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 });
+      const sprites = [];
+      for (const sx of [1, -1]) {
+        const a = new THREE.Sprite(head); a.position.set(sx * hx, hy, hz); a.scale.setScalar(1.1); sprites.push(a);
+        const b = new THREE.Sprite(this.tailGlow); b.position.set(sx * tx, ty, tz); b.scale.setScalar(0.7); sprites.push(b);
+      }
+      for (const sp of sprites) this.bodyG.add(sp);
+      this.nightParts = [pool, ...sprites];
+    }
+    if (this.nightParts) for (const m of this.nightParts) m.visible = on;
+  }
+
   // the per-car materials and the plate (the shared geometry stays cached)
   dispose() {
+    if (this.nightParts) { this.nightParts[0].material.dispose(); this.tailGlow.dispose(); }
     for (const m of [this.paint, this.paint2, this.tail, this.rev]) m.dispose();
     if (this.plateTex) this.plateTex.dispose();
   }
@@ -839,7 +868,8 @@ export class CarModel {
       if (w.front) w.pivot.rotation.y = -(v.steer || 0);
     }
     const brake = v.brakeLight ? 1 : 0;
-    this.tail.emissiveIntensity = 0.35 + brake * 2.4;
+    this.tail.emissiveIntensity = (this.night ? 1.3 : 0.35) + brake * 2.4;
+    if (this.tailGlow) { this.tailGlow.opacity = 0.55 + brake * 0.45; }
     this.rev.emissiveIntensity = v.reversing ? 2 : 0;
   }
 }

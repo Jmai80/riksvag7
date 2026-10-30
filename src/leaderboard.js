@@ -1,5 +1,5 @@
 // The online leaderboard: a table in the Supabase project "cityguess" (riksvag7_highscores, see
-// supabase/riksvag7_highscores.sql), reached the same way cityguess reaches its own highscores:
+// supabase/riksvag7_highscores.sql; the column `track` says which course a time was driven on), reached the same way cityguess reaches its own highscores:
 // plain fetch calls to Supabase's REST API with the project's publishable key. Lower time is better.
 const SUPABASE_URL = 'https://jisleyrtpojsfjtlbplp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ts0hUrMnRc00kDfzeAZXsg_SZBQeETG';
@@ -27,17 +27,19 @@ export function cleanName(s) {
   return String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 }
 
-// the best `limit` times, for one car or all of them
-export async function fetchTop(car = null, limit = 10) {
-  const q = new URLSearchParams({ select: 'id,name,car,time_ms,created_at', order: 'time_ms.asc,created_at.asc', limit: String(limit) });
+// the best `limit` times on a course (track 1, 2 …), for one car or all of them
+export async function fetchTop(track = 1, car = null, limit = 10) {
+  const q = new URLSearchParams({ select: 'id,name,car,time_ms,created_at,track', order: 'time_ms.asc,created_at.asc', limit: String(limit) });
+  q.set('track', `eq.${track}`);
   if (car) q.set('car', `eq.${car}`);
   const r = await call(`${BASE}?${q}`, { headers: headers() });
   return r.json();
 }
 
 // save a finished race; returns the new row (with its id)
-export async function submit({ name, car, timeMs, position, version }) {
-  const row = { name: cleanName(name), car, time_ms: Math.round(timeMs), position, version };
+export async function submit({ name, car, timeMs, position, version, track = 1 }) {
+  const row = { name: cleanName(name), car, time_ms: Math.round(timeMs), position, version, track };
+  if (!(Number.isInteger(track) && track >= 1 && track <= 99)) throw new Error('Okänd bana');
   if (!row.name) throw new Error('Skriv ett namn');
   if (!CARS.includes(car)) throw new Error('Okänd bil');
   if (!(row.time_ms >= MIN_MS && row.time_ms <= MAX_MS)) throw new Error('Tiden räknas inte');
@@ -46,10 +48,11 @@ export async function submit({ name, car, timeMs, position, version }) {
   return Array.isArray(out) ? out[0] : out;
 }
 
-// where a time ranks: { rank, total } (rank 1 = best). For one car or all.
-export async function rankOf(timeMs, car = null) {
+// where a time ranks on a course: { rank, total } (rank 1 = best). For one car or all.
+export async function rankOf(timeMs, track = 1, car = null) {
   const count = async (filter) => {
     const q = new URLSearchParams({ select: 'id', limit: '1' });
+    q.set('track', `eq.${track}`);
     if (filter) q.set('time_ms', filter);
     if (car) q.set('car', `eq.${car}`);
     const r = await call(`${BASE}?${q}`, { headers: headers({ Prefer: 'count=exact' }) });

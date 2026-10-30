@@ -31,6 +31,7 @@ export class World {
     this.placeRoadside(R);
     this.placeTrees(R);
     this.placeRocks(R);
+    this.placeEkebyFinish();
     this.buildColliders();
   }
 
@@ -255,6 +256,30 @@ export class World {
     }
   }
 
+  // course 2's finish in Ekeby: a third gantry (placed last, so nothing else moves), short barriers
+  // between the street lamps and a few people on the pavement in front of the shops
+  placeEkebyFinish() {
+    const T = this.track, s0 = T.zones.finish2;
+    T.pointAt(s0, P);
+    const g = { s: s0, kind: 'goal2', x: P.x, z: P.z, y: P.y, h: Math.atan2(P.dx, P.dz) };
+    this.gantries.push(g);
+    const R = makeRng(161);
+    const inHouse = (x, z) => this.buildings.some((b) => {
+      const dx = x - b.x, dz = z - b.z, c = Math.cos(b.h), sn = Math.sin(b.h);
+      const u = dx * c - dz * sn, v = dx * sn + dz * c;
+      return Math.abs(u) < b.w / 2 + 0.6 && Math.abs(v) < b.d / 2 + 0.6;
+    });
+    for (const side of [1, -1]) {
+      this.barriers.push({ s0: s0 - 14, s1: s0 + 14, d: side * (HW + 2.6) });
+      for (let k = 0; k < 16; k++) {
+        const s = s0 + R.range(-13, 13), d = side * (HW + R.range(3.1, 4.6));
+        T.beside(s, d, P);
+        const p = { x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dz * side, -P.dx * side) + R.range(-0.5, 0.5), shirt: R.int(0, 9), skin: R.int(0, 4), hair: R.int(0, 5), tall: R.range(0.92, 1.08), cheer: R() };
+        if (!inHouse(p.x, p.z) && !this.crowd.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.8)) this.crowd.push(p);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- guardrails
   placeRails() {
     const T = this.track, Z = T.zones;
@@ -293,7 +318,7 @@ export class World {
       if (T.townK(s) < 0.75 || Math.abs(s - Z.start) < 10 || Math.abs(s - Z.finish) < 10) continue;
       T.beside(s, side * (HW + 2.0), P);
       if (!this.isFree(P.x, P.z, 0.5)) continue;
-      this.lamps.push({ x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dx, P.dz) + (side > 0 ? -Math.PI / 2 : Math.PI / 2), side });
+      this.lamps.push({ x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dx, P.dz) + (side > 0 ? 0 : Math.PI), side });   // (the arm reaches out over the road)
     }
     // the power line on the left through the countryside
     let last = null;
@@ -311,9 +336,11 @@ export class World {
       T.beside(s, side * (HW + 1.25), P);
       this.posts.push({ x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dx, P.dz), side });
     }
-    const sign = (s, side, kind, text, d = HW + 2.4) => {
+    // dir 1: facing traffic going Ekeby → Sjuby; dir -1: facing traffic coming back (course 2).
+    // course: a board that belongs to one course only (shown only in that race)
+    const sign = (s, side, kind, text, d = HW + 2.4, o = {}) => {
       T.beside(s, side * d, P);
-      const g = { kind, text, x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dx, P.dz) + Math.PI, side };
+      const g = { kind, text, x: P.x, z: P.z, y: T.height(P.x, P.z), h: Math.atan2(P.dx, P.dz) + (o.dir === -1 ? 0 : Math.PI), side, course: o.course || 0, back: o.back };
       this.signs.push(g);
       this.occupy(P.x, P.z, 0.6);
       return g;
@@ -328,9 +355,22 @@ export class World {
     sign(Z.sjuby[0] - 70, 1, 'town', 'Sjuby');
     sign(Z.sjuby[0] - 58, 1, 'speed', '50');
     sign(Z.lake[0] + 40, 1, 'lake', 'Ekesjön');
-    // distance-to-go boards
-    for (const km of [4, 3, 2, 1]) { const s = Z.finish - km * 1000; if (s > Z.start + 200) sign(s, -1, 'board', `${km} KM`, HW + 2.6); }
-    sign(Z.finish - 500, -1, 'board', '500 M', HW + 2.6);
+    // and the other way, back toward Ekeby
+    const back = { dir: -1 };
+    const sd = Z.sjuby[0] - 200;
+    sign(Z.sjuby[0] - 80, -1, 'speed', '90', HW + 2.4, back);
+    sign(sd, -1, 'distance', `Mellby ${Math.max(1, Math.round((sd - Z.mellby[1]) / 1000))}|Ekeby ${Math.round((sd - Z.start) / 1000)}`, HW + 3.2, back);
+    sign(Z.mellby[1] + 30, -1, 'town', 'Mellby', HW + 2.4, back);
+    sign(Z.mellby[1] + 18, -1, 'speed', '50', HW + 2.4, back);
+    sign(Z.mellby[0] - 12, -1, 'speed', '90', HW + 2.4, back);
+    sign(Z.lake[1] - 40, -1, 'lake', 'Ekesjön', HW + 2.4, back);
+    sign(Z.ekeby[1] + 40, -1, 'town', 'Ekeby', HW + 2.4, back);
+    sign(Z.ekeby[1] + 28, -1, 'speed', '50', HW + 2.4, back);
+    // distance-to-go boards, one set per course (on the driver's left)
+    for (const km of [4, 3, 2, 1]) { const s = Z.finish - km * 1000; if (s > Z.start + 200) sign(s, -1, 'board', `${km} KM`, HW + 2.6, { course: 1 }); }
+    sign(Z.finish - 500, -1, 'board', '500 M', HW + 2.6, { course: 1 });
+    for (const km of [4, 3, 2, 1]) { const s = Z.finish2 + km * 1000; if (s < Z.finish - 200) sign(s, 1, 'board', `${km} KM`, HW + 2.6, { course: 2, dir: -1 }); }
+    sign(Z.finish2 + 500, 1, 'board', '500 M', HW + 2.6, { course: 2, dir: -1 });
     // chevrons on the outside of the tight bends
     for (let c = 0; c < T.cornerS.length; c++) {
       const s = T.cornerS[c];
@@ -341,7 +381,7 @@ export class World {
       for (let k = -2; k <= 2; k++) {
         const ss = s + k * 14;
         if (nearRail(ss, side)) continue;
-        sign(ss, side, 'chevron', P.k > 0 ? 'L' : 'R', HW + 2.3);
+        sign(ss, side, 'chevron', P.k > 0 ? 'L' : 'R', HW + 2.3, { back: P.k > 0 ? 'R' : 'L' });   // (two-sided: the bend turns the other way back)
       }
     }
     void L; void R;

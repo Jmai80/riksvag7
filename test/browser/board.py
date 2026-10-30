@@ -12,7 +12,10 @@ ROWS = [
     {'id': 3, 'name': 'Sonja', 'car': 'svala', 'time_ms': 134800, 'created_at': '2026-10-30T16:02:00Z'},
     {'id': 4, 'name': '<b>Hacker</b>', 'car': 'lo', 'time_ms': 139000, 'created_at': '2026-10-30T16:03:00Z'},
     {'id': 5, 'name': 'Mormor', 'car': 'svala', 'time_ms': 152300, 'created_at': '2026-10-30T16:04:00Z'},
+    {'id': 6, 'name': 'Kvällsugglan', 'car': 'falk', 'time_ms': 127500, 'created_at': '2026-10-30T20:00:00Z', 'track': 2},
+    {'id': 7, 'name': 'Nattis', 'car': 'lo', 'time_ms': 133300, 'created_at': '2026-10-30T20:05:00Z', 'track': 2},
 ]
+for r in ROWS: r.setdefault('track', 1)        # the column's default: everything before 1.3 is course 1
 async def fake(route):
     req = route.request
     u = urlparse(req.url); q = parse_qs(u.query)
@@ -24,6 +27,7 @@ async def fake(route):
         ROWS.append(row)
         return await route.fulfill(status=201, headers=hdr, body=json.dumps([row]))
     rows = sorted(ROWS, key=lambda r: r['time_ms'])
+    if 'track' in q: rows = [r for r in rows if r['track'] == int(q['track'][0][3:])]
     if 'car' in q: rows = [r for r in rows if r['car'] == q['car'][0][3:]]
     if 'time_ms' in q: rows = [r for r in rows if r['time_ms'] < int(q['time_ms'][0][3:])]
     if req.headers.get('prefer') == 'count=exact': hdr['Content-Range'] = f'0-0/{len(rows)}'
@@ -55,9 +59,17 @@ async def main():
         await pg.locator('#bChips button[data-car="lo"]').click()
         await pg.wait_for_function('document.querySelectorAll("#bList li").length === 2')
         await pg.evaluate('window.__rv.run(0.2)'); await shot('2_lo')
+        # course 2 has a list of its own
+        await pg.locator('#bChips button[data-car=""]').click()
+        await pg.locator('#bTracks button[data-track="2"]').click()
+        await pg.wait_for_function('document.querySelectorAll("#bList li").length === 2')
+        names2 = await pg.evaluate('[...document.querySelectorAll("#bList li span")].map(s => s.firstChild.textContent)')
+        print('course 2 list', names2); assert names2 == ['Kvällsugglan', 'Nattis'], 'course 2 shows its own times'
+        await pg.evaluate('window.__rv.run(0.2)'); await shot('2b_course2')
         await pg.locator('#bClose').click()
         # Enter while typing doesn't start the game; the keys WASD go into the name field
         await pg.evaluate('window.__rv.toSelect(); window.__rv.setCar("falk")')
+        await pg.locator('#courses button[data-course="2"]').click()
         await pg.locator('#go').click()
         await pg.evaluate('window.__rv.run(5.9, 1/60)')
         await pg.evaluate('''async () => { const { Driver } = await import('/src/ai.js'); const g = window.__rv.game;
@@ -72,9 +84,11 @@ async def main():
         await pg.wait_for_function('document.getElementById("saveMsg").className === "ok"', timeout=20000)
         msg = await pg.evaluate('document.getElementById("saveMsg").textContent')
         print('saved:', msg, '| sent', ROWS[-1])
+        assert ROWS[-1]['track'] == 2 and 'bana 2' in msg, 'the time is saved on course 2 and ranked there'
         await pg.evaluate('window.__rv.run(0.2)'); await shot('3_saved')
         await pg.locator('#rBoard').click()
         await pg.wait_for_function('document.querySelector("#bList li.me")')
+        assert await pg.evaluate('document.querySelector("#bTracks .on").dataset.track') == '2', 'the list opens on the course you raced'
         await pg.evaluate('window.__rv.run(0.2)'); await shot('4_me')
         print('remembered name', await pg.evaluate('window.__rv.settings.name'))
         # no network: a friendly message

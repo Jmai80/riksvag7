@@ -240,3 +240,58 @@ export function blobTexture() {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   return tex(c, { repeat: false });
 }
+
+// ------------------------------------------------------------------ the evening (course 2)
+// which windows glow: the same atlas as windowTexture() – plain windows stay dark, the ones with
+// curtains and the ones with a lamp are lit warm
+export function windowGlowTexture() {
+  const S = 128, c = canvas(S * 4, S), g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, S * 4, S);
+  const m = 10;
+  for (const [k, top, bot] of [[1, '#ffcf86', '#c98a3c'], [2, '#fff0c8', '#e0a050']]) {
+    const x0 = k * S, gr = g.createLinearGradient(0, m, 0, S - m);
+    gr.addColorStop(0, top); gr.addColorStop(1, bot);
+    g.fillStyle = gr; g.fillRect(x0 + m, m, S - 2 * m, S - 2 * m);
+    g.fillStyle = '#000'; g.fillRect(x0 + S / 2 - 4, m, 8, S - 2 * m); g.fillRect(x0 + m, S * 0.38, S - 2 * m, 6);
+    if (k === 1) { g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(x0 + m, m, 22, S - 2 * m); g.fillRect(x0 + S - m - 22, m, 22, S - 2 * m); }
+  }
+  return tex(c, { repeat: false });
+}
+export function shopGlowTexture() {
+  const c = canvas(512, 256), g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 512, 256);
+  const gr = g.createLinearGradient(0, 60, 0, 256);
+  gr.addColorStop(0, '#fff2d6'); gr.addColorStop(1, '#d9a45c');
+  g.fillStyle = gr; g.fillRect(14, 60, 484, 186);
+  g.fillStyle = '#000'; for (const x of [170, 340]) g.fillRect(x, 60, 8, 186);
+  return tex(c, { repeat: false });
+}
+// a pool of light on the road: round (street lights) or a long beam (headlights, u across, v ahead)
+export function lightPoolTexture(beam) {
+  const W = 128, H = beam ? 256 : 128, c = canvas(W, H), g = c.getContext('2d');
+  const img = g.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let a;
+    const u = (x + 0.5) / W - 0.5;
+    if (beam) {
+      const v = 1 - (y + 0.5) / H;                  // 0 at the car, 1 far ahead
+      const spread = 0.12 + v * 0.38;
+      a = Math.exp(-((u / spread) ** 2) * 2.2) * Math.min(1, v * 7) * Math.pow(1 - v, 1.3);
+    } else {
+      const w = (y + 0.5) / H - 0.5, r = Math.hypot(u, w) * 2;
+      a = Math.pow(Math.max(0, 1 - r), 1.8);
+    }
+    const i = (y * W + x) * 4;
+    img.data[i] = 255; img.data[i + 1] = beam ? 236 : 214; img.data[i + 2] = beam ? 205 : 160; img.data[i + 3] = Math.round(a * 255);
+  }
+  g.putImageData(img, 0, 0);
+  return tex(c, { repeat: false });
+}
+// the glare round a lamp
+export function glowTexture() {
+  const c = canvas(64, 64), g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.75)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return tex(c, { repeat: false });
+}

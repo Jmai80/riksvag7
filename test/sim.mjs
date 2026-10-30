@@ -7,6 +7,7 @@ import { Driver, RIVALS } from '../src/ai.js';
 import { Vehicle } from '../src/vehicle.js';
 import { CAR_TYPES, CAR_ORDER, PAINTS, zeroTo100, topSpeed } from '../src/cars.js';
 import { circleVs } from '../src/collide.js';
+import { Course, COURSES, COURSE_IDS } from '../src/course.js';
 
 let fails = 0, n = 0;
 const check = (ok, what) => { n++; if (!ok) { fails++; console.log('FAIL', what); } };
@@ -208,19 +209,93 @@ section('the race');
   check(g.wrongWay, 'driving back toward Ekeby: FEL HÅLL');
 }
 
+section('course 2: Sjuby → Ekeby in the evening');
+const C1 = new Course(T, 1), C2 = new Course(T, 2);
+{
+  check(COURSE_IDS.length === 2 && COURSES[2].mood === 'dusk' && COURSES[1].mood === 'day', 'two courses: by day and in the evening');
+  check(C2.zones.start === T.L - T.zones.finish && C2.zones.finish === T.L - T.zones.finish2 && T.zones.finish2 > T.zones.start + 60, 'course 2 starts under the Sjuby finish and finishes in Ekeby, with room to stop before the old start');
+  check(W.gantries.length === 3 && W.gantries[2].kind === 'goal2', 'a third gantry for the finish in Ekeby');
+  // the same road, driven the other way
+  let worst = 0, dirs = 0;
+  for (let s = 50; s < T.L - 50; s += 37) {
+    const a = C2.pointAt(s, {}), b = T.pointAt(T.L - s, {});
+    worst = Math.max(worst, Math.hypot(a.x - b.x, a.z - b.z));
+    if (a.dx * b.dx + a.dz * b.dz < -0.999) dirs++;
+  }
+  check(worst < 1e-6 && dirs === Math.floor((T.L - 100) / 37) + 1, 'every point of course 2 is the road, pointing the other way');
+  let round = 0;
+  for (let s = 300; s < T.L - 300; s += 211) { const q = C2.beside(s, 1.5, {}); round = Math.max(round, Math.abs(C2.project(q.x, q.z, s - 5) - s)); }
+  check(round < 0.5 && C2.lastDist < 2, 'finding your place on course 2 works both ways');
+  const r = C2.beside(1200, 2, {}), l = C2.pointAt(1200, {});
+  check((r.x - l.x) * -l.dz + (r.z - l.z) * l.dx > 1.9, 'right is right in the driving direction');
+  check(Math.min(...C2.vs) > 25 && Math.max(...C2.vs) <= 60.01, 'the computer drivers have their own braking points for course 2');
+  // braking points come before the corners in the driving direction
+  let early = 0, total = 0;
+  for (let i = 5; i < T.n - 5; i++) {
+    if (T.vs[i] < T.vs[i + 1] - 0.5) { total++; if (C2.vs[i] <= T.vs[i] + 1e-6) early++; }
+  }
+  check(total > 0 && early === total, 'braking for course 1 is never later than for course 2 at the same spot – it differs only on the approach');
+  // signs: each course shows its own km boards, both see the shared ones
+  const own = (c) => W.signs.filter((g) => g.course === c).length;
+  check(own(1) > 3 && own(2) > 3 && W.signs.some((g) => !g.course), `km boards per course (${own(1)} and ${own(2)}) and signs for both`);
+}
+{
+  const g = new Game({ track: C2, world: W, carType: 'svala', paint: 'gul' });
+  const sj = T.zones.sjuby;
+  const pP = g.player;
+  check(T.project(pP.x, pP.z, T.L - C2.zones.start, 400, 400) > T.zones.finish - 40, 'the grid stands in Sjuby');
+  check(g.position === 6 && g.vehicles.every((v) => Math.abs(v.dist - C2.zones.start) < 40), 'six cars on the grid, you last');
+  // heading toward Ekeby: course distance grows as the road's shrinks
+  const h0 = Math.atan2(C2.pointAt(C2.zones.start, {}).dx, C2.pointAt(C2.zones.start, {}).dz);
+  check(Math.abs(Math.atan2(Math.sin(pP.h - h0), Math.cos(pP.h - h0))) < 0.05, 'every car faces Ekeby');
+  run(g, 6);
+  check(g.phase === 'race', 'the same start: intro, three red, green');
+  const d = new Driver(g, g.player, { skill: 1.02, base: 2, dist: g.player.dist, player: true }); d.hold = false; g.player.auto = d;
+  let t = 0, wrong = 0;
+  while (t < 260 && !g.vehicles.every((v) => v.finished)) { g.step(DT, {}); t += DT; if (g.wrongWay) wrong++; }
+  check(g.vehicles.every((v) => v.finished), 'all six reach the finish in Ekeby');
+  check(wrong === 0, 'nobody is told FEL HÅLL on the way');
+  check(g.drivers.every((dr) => dr.respawns <= 1), `the computer drivers keep on the road (respawns ${g.drivers.map((dr) => dr.respawns).join(',')})`);
+  const end = T.project(g.player.x, g.player.z, T.zones.start, 300, 300);
+  check(end < T.zones.start + 150, 'you end up in Ekeby');
+  const st = g.standings(), winner = st[0].time, last = st[5].time;
+  check(winner > 115 && winner < 160, `the winning time is ${winner.toFixed(1)} s`);
+  check(last - winner < 25, `a close race: ${(last - winner).toFixed(1)} s from first to last`);
+  console.log('  ' + st.map((r) => `${r.name} ${r.time.toFixed(1)}`).join(' · '));
+  void sj;
+}
+{
+  // course 2's own rules: driving toward Sjuby is the wrong way; TILLBAKA puts you in your lane
+  const g = new Game({ track: C2, world: W, carType: 'falk', paint: 'bla', rivals: false, intro: 0.05 });
+  run(g, 3.4);
+  const q = C2.beside(1500, 2, {});
+  g.player.place(g, q.x, q.z, Math.atan2(-q.dx, -q.dz)); g.player.dist = 1500;
+  run(g, 3, { throttleAxis: 1 });
+  check(g.wrongWay, 'driving back toward Sjuby on course 2: FEL HÅLL');
+  let resets = 0; g.on('reset', () => resets++);
+  const far = C2.beside(2000, LIMIT + 15, {});
+  g.player.place(g, far.x, far.z, 0); g.player.dist = 2000;
+  run(g, 2);
+  const back = C2.project(g.player.x, g.player.z, 2000);
+  check(resets === 1 && Math.abs(back - 1990) < 20 && C2.lastDist < 3, 'too far out on course 2: back in your lane, a little behind');
+  const a = C2.pointAt(back, {});
+  check(Math.sin(g.player.h) * a.dx + Math.cos(g.player.h) * a.dz > 0.99, 'facing Ekeby again');
+}
+
 section('the online leaderboard (Supabase, faked here)');
 {
   const LB = await import('../src/leaderboard.js');
   check(LB.cleanName('  Kalle \n  Anka  ') === 'Kalle Anka', 'names are tidied');
   check(LB.cleanName('x'.repeat(30)).length === 16, 'names are cut at 16 characters');
   const calls = [];
-  const rows = [{ id: 1, name: 'Tord', car: 'lo', time_ms: 131000 }, { id: 2, name: 'Sonja', car: 'falk', time_ms: 140500 }];
+  const rows = [{ id: 1, name: 'Tord', car: 'lo', time_ms: 131000, track: 1 }, { id: 2, name: 'Sonja', car: 'falk', time_ms: 140500, track: 1 }, { id: 3, name: 'Rolf', car: 'svala', time_ms: 129000, track: 2 }];
   globalThis.fetch = async (url, opts = {}) => {
     calls.push({ url: String(url), opts });
     const u = new URL(url), h = opts.headers || {};
     if (opts.method === 'POST') { const r = { id: rows.length + 1, ...JSON.parse(opts.body) }; rows.push(r); return new Response(JSON.stringify([r]), { status: 201 }); }
     let list = rows.slice().sort((a, b) => a.time_ms - b.time_ms);
-    const car = u.searchParams.get('car'), lt = u.searchParams.get('time_ms');
+    const car = u.searchParams.get('car'), lt = u.searchParams.get('time_ms'), tr = u.searchParams.get('track');
+    if (tr) list = list.filter((r) => r.track === Number(tr.slice(3)));
     if (car) list = list.filter((r) => r.car === car.slice(3));
     if (lt) list = list.filter((r) => r.time_ms < Number(lt.slice(3)));
     const headers = h.Prefer === 'count=exact' ? { 'content-range': `0-0/${list.length}` } : {};
@@ -228,18 +303,24 @@ section('the online leaderboard (Supabase, faked here)');
   };
   const top = await LB.fetchTop();
   check(top.length === 2 && top[0].name === 'Tord', 'the list comes back fastest first');
+  check(calls[0].url.includes('track=eq.1'), 'course 1 by default');
+  const top2 = await LB.fetchTop(2);
+  check(top2.length === 1 && top2[0].name === 'Rolf' && calls[1].url.includes('track=eq.2'), 'each course has its own list');
   check(calls[0].url.includes('/rest/v1/riksvag7_highscores') && calls[0].opts.headers.apikey.startsWith('sb_publishable_'), 'it asks the riksvag7_highscores table with the publishable key (as cityguess does)');
   check(calls[0].url.includes('order=time_ms.asc'), 'ordered by time, lowest first');
-  const row = await LB.submit({ name: ' Jimmy ', car: 'svala', timeMs: 135400.4, position: 2, version: '1.1' });
+  const row = await LB.submit({ name: ' Jimmy ', car: 'svala', timeMs: 135400.4, position: 2, version: '1.3' });
   const sent = JSON.parse(calls[calls.length - 1].opts.body);
-  check(row.id === 3 && sent.name === 'Jimmy' && sent.time_ms === 135400 && sent.car === 'svala' && sent.position === 2, 'a finished race is saved with name, car, time in ms and position');
+  check(row.id === 4 && sent.name === 'Jimmy' && sent.time_ms === 135400 && sent.car === 'svala' && sent.position === 2 && sent.track === 1, 'a finished race is saved with name, car, time in ms, position and course');
   const rk = await LB.rankOf(135400);
-  check(rk && rk.rank === 2 && rk.total === 3, `ranked ${rk && rk.rank} of ${rk && rk.total} overall`);
-  const rkc = await LB.rankOf(135400, 'svala');
+  check(rk && rk.rank === 2 && rk.total === 3, `ranked ${rk && rk.rank} of ${rk && rk.total} on course 1`);
+  const rkc = await LB.rankOf(135400, 1, 'svala');
   check(rkc && rkc.rank === 1 && rkc.total === 1, 'and first with the Svala');
+  const row2 = await LB.submit({ name: 'Jimmy', car: 'falk', timeMs: 128000, position: 1, version: '1.3', track: 2 });
+  const rk2 = await LB.rankOf(128000, 2);
+  check(row2.track === 2 && rk2 && rk2.rank === 1 && rk2.total === 2, 'a time on course 2 is saved and ranked on course 2 only');
   let refused = 0;
-  for (const bad of [{ name: '', car: 'lo', timeMs: 130000 }, { name: 'A', car: 'buss', timeMs: 130000 }, { name: 'A', car: 'lo', timeMs: 50000 }]) { try { await LB.submit(bad); } catch (_) { refused++; } }
-  check(refused === 3, 'no name, an unknown car or an impossible time is refused before it is sent');
+  for (const bad of [{ name: '', car: 'lo', timeMs: 130000 }, { name: 'A', car: 'buss', timeMs: 130000 }, { name: 'A', car: 'lo', timeMs: 50000 }, { name: 'A', car: 'lo', timeMs: 130000, track: 0 }]) { try { await LB.submit(bad); } catch (_) { refused++; } }
+  check(refused === 4, 'no name, an unknown car, an impossible time or no course is refused before it is sent');
   globalThis.fetch = async () => new Response('nope', { status: 503 });
   let threw = false; try { await LB.fetchTop(); } catch (_) { threw = true; }
   check(threw, 'a server error shows up as an error (the game then says it could not reach the list)');

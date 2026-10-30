@@ -1,5 +1,5 @@
 # Load the game and walk through every screen, driving the clock by hand (?manual) so software
-# WebGL keeps up: python3 test/browser/smoke.py [phone|land|desk] [car]
+# WebGL keeps up: python3 test/browser/smoke.py [phone|land|desk] [car] [course 1|2]
 import asyncio, sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from playwright.async_api import async_playwright
@@ -8,6 +8,7 @@ VIEW = {'phone': (390, 844), 'land': (844, 390), 'desk': (1280, 720)}
 async def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else 'phone'
     car = sys.argv[2] if len(sys.argv) > 2 else 'svala'
+    course = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     w, h = VIEW[mode]
     os.makedirs('test/shots', exist_ok=True)
     async with async_playwright() as p:
@@ -22,9 +23,9 @@ async def main():
         await pg.goto('http://localhost:8765/index.html?manual')
         await pg.wait_for_function('window.__rv && window.__rv.state === "title"', timeout=240000)
         print('title after', round(time.time() - t0, 1), 's')
-        shot = lambda name: pg.screenshot(path=f'test/shots/smoke_{mode}_{name}.png', timeout=120000)
+        shot = lambda name: pg.screenshot(path=f'test/shots/smoke{course if course > 1 else ""}_{mode}_{name}.png', timeout=120000)
         await pg.evaluate('window.__rv.run(4)'); await shot('1_title')
-        await pg.evaluate(f'window.__rv.toSelect(); window.__rv.setCar("{car}"); window.__rv.run(2)'); await shot('2_select')
+        await pg.evaluate(f'window.__rv.toSelect(); window.__rv.setCourse({course}); window.__rv.setCar("{car}"); window.__rv.run(2)'); await shot('2_select')
         await pg.evaluate('window.__rv.startRace(); window.__rv.run(1.4)'); await shot('3_intro')
         await pg.evaluate('window.__rv.run(2.6)'); await shot('4_count')
         # drive: the autopilot takes the player's car
@@ -33,7 +34,7 @@ async def main():
         await pg.evaluate('window.__rv.run(6, 1/60)'); await shot('5_race')
         for i, sec in enumerate([20, 25, 22, 30]):
             await pg.evaluate(f'window.__rv.run({sec}, 1/60)')
-            info = await pg.evaluate('({ s: Math.round(window.__rv.game.player.dist), pos: window.__rv.game.position, kmh: Math.round(window.__rv.game.player.kmh), t: window.__rv.game.raceTime.toFixed(1) })')
+            info = await pg.evaluate('({ s: Math.round(window.__rv.game.player.dist), pos: window.__rv.game.position, kmh: Math.round(window.__rv.game.player.kmh), t: window.__rv.game.raceTime.toFixed(1), tris: window.__rv.view.renderer.info.render.triangles, calls: window.__rv.view.renderer.info.render.calls })')
             print('drive', info)
             await shot(f'6_road{i}')
         print('logs', logs[:12])

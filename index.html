@@ -108,9 +108,19 @@ kbd { font: 700 0.8em/1 var(--ui); padding: 3px 6px 4px; border-radius: 5px; bor
 .best { text-align: center; font-size: 13px; color: var(--muted); }
 .best b { color: var(--green); }
 #go { align-self: center; }
+.courses { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: min(460px, 100%); align-self: center; margin: 10px 0 auto; }
+.courses button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 12px 8px; border-radius: 14px; background: var(--glass); border: 2px solid rgba(255,255,255,0.18); text-align: left; }
+.courses button b { font: 900 14px/1 var(--display); letter-spacing: 0.16em; color: var(--muted); }
+.courses button span { font: 800 19px/1.05 var(--display); letter-spacing: 0.02em; }
+.courses button i { font: 600 12px/1.2 var(--ui); font-style: normal; color: var(--muted); }
+.courses button.on { border-color: var(--gold); background: rgba(20, 22, 30, 0.82); }
+.courses button.on b { color: var(--gold); }
+.courses button[data-course="2"].on { border-color: #ff9a5e; } .courses button[data-course="2"].on b { color: #ff9a5e; }
 /* a low landscape screen: the card on the right, the car on the left */
 @media (orientation: landscape) and (max-height: 560px) {
   #select { justify-content: flex-start; }
+  .courses { width: calc(100% - min(360px, 46vw) - 24px); align-self: flex-start; margin-top: 6px; }
+  .courses button span { font-size: 16px; } .courses button i { display: none; }
   .selCard { position: absolute; right: calc(var(--sar) + 12px); top: calc(var(--sat) + 10px); bottom: calc(var(--sab) + 10px); width: min(360px, 46vw); overflow-y: auto; gap: 7px; padding: 10px 14px; justify-content: center; }
   .selTop { max-width: calc(100% - min(360px, 46vw) - 24px); }
   .blurb { font-size: 13px; }
@@ -207,8 +217,13 @@ table.st small { color: var(--muted); }
 /* the online leaderboard */
 .ghost { font: 900 clamp(18px, 4.4vmin, 24px)/1 var(--display); letter-spacing: 0.1em; padding: 14px 22px 12px; border-radius: 999px; background: var(--glass); border: 2px solid rgba(255,255,255,0.35); color: var(--paper); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.resCourse { font: 800 14px/1 var(--display); letter-spacing: 0.18em; color: var(--muted); margin-bottom: 4px; }
+.resCourse.dusk { color: #ff9a5e; }
 .chips button { font: 800 14px/1 var(--display); letter-spacing: 0.08em; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); }
 .chips button.on { background: var(--gold); color: #17130a; border-color: transparent; }
+.chips.tracks button { font-size: 15px; padding: 9px 12px; }
+.chips.tracks button.on { background: #ffffff; color: #17130a; }
+.chips.tracks button[data-track="2"].on { background: #ff9a5e; }
 ol.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
 ol.board li { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; background: rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
 ol.board li b { font: 900 18px/1 var(--display); color: var(--muted); text-align: center; }
@@ -238,16 +253,20 @@ ol.board li.me { background: rgba(255,207,51,0.18); box-shadow: inset 0 0 0 1px 
   <div id="loading"><div><div class="t">RIKSVÄG 7</div><p id="loadMsg">Asfalterar vägen…</p><div id="loadbar"><i></i></div></div></div>
 
   <div id="title" hidden>
-    <div class="ver" id="ver">Version 1.2 · Ekeby–Sjuby</div>
+    <div class="ver" id="ver">Version 1.3 · Ekeby–Sjuby</div>
     <div><div class="sign" aria-label="Riksväg 7"><span class="w">RIKSVÄG</span><span class="n">7</span></div></div>
-    <div class="route">Ekeby → Sjuby · 5,5 km</div>
-    <div class="tagline">Tre bilar. Sex förare. En lång väg genom skog, byar och över sjön.</div>
+    <div class="route">Två banor · Ekeby ⇄ Sjuby · 5,5 km</div>
+    <div class="tagline">Tre bilar. Sex förare. Ut till Sjuby i solsken – och tillbaka i skymningen.</div>
     <div class="cta"><button class="big" id="play" type="button">SPELA</button><button class="ghost" id="topBtn" type="button">TOPPLISTA</button><small id="titleBest"></small></div>
     <div id="titleHelp"></div>
   </div>
 
   <div id="select" hidden>
-    <div class="selTop"><h2>VÄLJ BIL</h2><button class="back" id="selBack" type="button">‹ MENY</button></div>
+    <div class="selTop"><h2 id="selTitle">VÄLJ BANA OCH BIL</h2><button class="back" id="selBack" type="button">‹ MENY</button></div>
+    <div class="courses" id="courses" role="radiogroup" aria-label="Bana">
+      <button type="button" data-course="1" role="radio"><b>BANA 1</b><span>Ekeby → Sjuby</span><i>Dagsetappen</i></button>
+      <button type="button" data-course="2" role="radio"><b>BANA 2</b><span>Sjuby → Ekeby</span><i>Kvällsracet</i></button>
+    </div>
     <div class="selCard">
       <div class="selHead">
         <button class="arrow" id="prevCar" type="button" aria-label="Föregående bil">‹</button>
@@ -316,6 +335,7 @@ ol.board li.me { background: rgba(255,207,51,0.18); box-shadow: inset 0 0 0 1px 
 
   <div id="results" class="overlay" hidden>
     <div class="panel" role="dialog" aria-label="Resultat">
+      <div class="resCourse" id="rCourse">BANA 1 · EKEBY → SJUBY</div>
       <div class="resPos"><b id="rPos">1</b><span id="rText">VINST!</span></div>
       <div class="resTime" id="rTime"></div>
       <table class="st"><tbody id="rTable"></tbody></table>
@@ -332,6 +352,10 @@ ol.board li.me { background: rgba(255,207,51,0.18); box-shadow: inset 0 0 0 1px 
   <div id="board" class="overlay" hidden>
     <div class="panel" role="dialog" aria-labelledby="bTitle">
       <h2 id="bTitle">TOPPLISTA</h2>
+      <div class="chips tracks" id="bTracks">
+        <button type="button" data-track="1" class="on">Bana 1 · Ekeby → Sjuby</button>
+        <button type="button" data-track="2">Bana 2 · Kvällsracet</button>
+      </div>
       <div class="chips" id="bChips">
         <button type="button" data-car="" class="on">Alla bilar</button>
         <button type="button" data-car="svala">Svala RS</button>

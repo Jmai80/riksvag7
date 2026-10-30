@@ -1,6 +1,6 @@
 {
   "name": "riksvag7",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Riksväg 7 – ett racingspel i three.js, byggt för mobilen.",
   "directories": {
     "doc": "docs",

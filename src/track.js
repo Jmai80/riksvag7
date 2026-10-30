@@ -234,6 +234,7 @@ export class Track {
       ridge: [cs[9] - 60, cs[13] + 140],
       sjuby: [cs[13] + 140, L],              // the finish town
       start: 70, finish: L - 170,
+      finish2: 161,                          // course 2's finish line, in Ekeby (room to stop after it)
       bumps: [cs[2] + 155, cs[11] + 165],     // crests where a fast car takes off
     };
   }
@@ -357,7 +358,10 @@ export class Track {
   roadY(s) { const p = this.pointAt(s, T1); return p.y; }
 
   // ---------------------------------------------------------------- the AI's speed profile
-  buildSpeedProfile() {
+  buildSpeedProfile() { this.vs = this.speedProfile(false); }
+
+  // the cornering limit everywhere, then a braking pass against the driving direction
+  speedProfile(reverse) {
     const n = this.n, vs = new Float64Array(n), aLat = 15.5, aBrake = 11, vMax = 60;
     for (let i = 0; i < n; i++) {
       // the tightest curvature a little around here
@@ -365,9 +369,9 @@ export class Track {
       for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) k = Math.max(k, Math.abs(this.ks[j]));
       vs[i] = k ? Math.min(vMax, Math.sqrt(aLat / k)) : vMax;
     }
-    // into the crests a little slower, so the computer drivers don't fly into the next bend
-    for (let i = n - 2; i >= 0; i--) vs[i] = Math.min(vs[i], Math.sqrt(vs[i + 1] * vs[i + 1] + 2 * aBrake * (this.cum[i + 1] - this.cum[i])));
-    this.vs = vs;
+    if (!reverse) for (let i = n - 2; i >= 0; i--) vs[i] = Math.min(vs[i], Math.sqrt(vs[i + 1] * vs[i + 1] + 2 * aBrake * (this.cum[i + 1] - this.cum[i])));
+    else for (let i = 1; i < n; i++) vs[i] = Math.min(vs[i], Math.sqrt(vs[i - 1] * vs[i - 1] + 2 * aBrake * (this.cum[i] - this.cum[i - 1])));
+    return vs;
   }
 
   // ---------------------------------------------------------------- what the cars stand on
