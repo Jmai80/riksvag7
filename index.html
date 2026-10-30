@@ -204,6 +204,29 @@ table.st td:first-child { font: 900 18px/1 var(--display); color: var(--muted); 
 table.st td:last-child { text-align: right; font-weight: 700; }
 table.st tr.me td { color: var(--gold); }
 table.st small { color: var(--muted); }
+/* the online leaderboard */
+.ghost { font: 900 clamp(18px, 4.4vmin, 24px)/1 var(--display); letter-spacing: 0.1em; padding: 14px 22px 12px; border-radius: 999px; background: var(--glass); border: 2px solid rgba(255,255,255,0.35); color: var(--paper); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: 800 14px/1 var(--display); letter-spacing: 0.08em; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); }
+.chips button.on { background: var(--gold); color: #17130a; border-color: transparent; }
+ol.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+ol.board li { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; background: rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
+ol.board li b { font: 900 18px/1 var(--display); color: var(--muted); text-align: center; }
+ol.board li:nth-child(1) b { color: var(--gold); } ol.board li:nth-child(2) b { color: #d9dde2; } ol.board li:nth-child(3) b { color: #d58b4a; }
+ol.board li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+ol.board li small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; }
+ol.board li em { font-style: normal; font: 800 17px/1 var(--display); letter-spacing: 0.03em; }
+ol.board li.me { background: rgba(255,207,51,0.18); box-shadow: inset 0 0 0 1px rgba(255,207,51,0.6); }
+.boardMsg { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+#saveBox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
+#saveBox h3 { margin: 0; font: 900 18px/1 var(--display); letter-spacing: 0.12em; color: var(--gold); }
+.saveRow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.saveRow input { font: 600 16px/1.2 var(--ui); color: var(--paper); background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; min-width: 0; -webkit-user-select: text; user-select: text; }
+.saveRow input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+.saveRow .row.primary { font-size: 17px; padding: 11px 14px; width: auto; }
+#saveMsg { margin: 0; font-size: 13px; color: var(--muted); }
+#saveMsg.ok { color: var(--green); } #saveMsg.err { color: #ff8a80; }
+.linkish { font: 700 14px/1 var(--ui); color: var(--gold); text-decoration: underline; text-underline-offset: 3px; padding: 4px 0; text-align: left; }
 #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 55; transition: opacity 0.35s; }
 #fade.on { opacity: 1; }
 </style>
@@ -215,11 +238,11 @@ table.st small { color: var(--muted); }
   <div id="loading"><div><div class="t">RIKSVÄG 7</div><p id="loadMsg">Asfalterar vägen…</p><div id="loadbar"><i></i></div></div></div>
 
   <div id="title" hidden>
-    <div class="ver" id="ver">Version 1.0 · Ekeby–Sjuby</div>
+    <div class="ver" id="ver">Version 1.1 · Ekeby–Sjuby</div>
     <div><div class="sign" aria-label="Riksväg 7"><span class="w">RIKSVÄG</span><span class="n">7</span></div></div>
     <div class="route">Ekeby → Sjuby · 5,5 km</div>
     <div class="tagline">Tre bilar. Sex förare. En lång väg genom skog, byar och över sjön.</div>
-    <div class="cta"><button class="big" id="play" type="button">SPELA</button><small id="titleBest"></small></div>
+    <div class="cta"><button class="big" id="play" type="button">SPELA</button><button class="ghost" id="topBtn" type="button">TOPPLISTA</button><small id="titleBest"></small></div>
     <div id="titleHelp"></div>
   </div>
 
@@ -296,7 +319,28 @@ table.st small { color: var(--muted); }
       <div class="resPos"><b id="rPos">1</b><span id="rText">VINST!</span></div>
       <div class="resTime" id="rTime"></div>
       <table class="st"><tbody id="rTable"></tbody></table>
+      <div id="saveBox">
+        <h3>TOPPLISTAN</h3>
+        <div class="saveRow"><input id="pName" type="text" maxlength="16" placeholder="Ditt namn" autocomplete="nickname" enterkeyhint="done" aria-label="Ditt namn"><button class="row primary" id="pSave" type="button">SPARA TID</button></div>
+        <p id="saveMsg">Spara tiden så syns den för alla som spelar.</p>
+        <button class="linkish" id="rBoard" type="button">Visa topplistan</button>
+      </div>
       <div class="duo"><button class="row primary" id="rAgain" type="button">KÖR IGEN</button><button class="row" id="rCars" type="button">BYT BIL</button></div>
+    </div>
+  </div>
+
+  <div id="board" class="overlay" hidden>
+    <div class="panel" role="dialog" aria-labelledby="bTitle">
+      <h2 id="bTitle">TOPPLISTA</h2>
+      <div class="chips" id="bChips">
+        <button type="button" data-car="" class="on">Alla bilar</button>
+        <button type="button" data-car="svala">Svala RS</button>
+        <button type="button" data-car="falk">Falk GT</button>
+        <button type="button" data-car="lo">Lo V8</button>
+      </div>
+      <ol class="board" id="bList"></ol>
+      <p class="boardMsg" id="bMsg"></p>
+      <button class="row primary" id="bClose" type="button">STÄNG</button>
     </div>
   </div>
 

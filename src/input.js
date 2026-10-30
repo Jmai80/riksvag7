@@ -30,6 +30,7 @@ export class Input {
     root.addEventListener('touchmove', (e) => { if (this.enabled && !(e.target.closest && e.target.closest('.overlay'))) e.preventDefault(); }, opt);
     document.addEventListener('gesturestart', (e) => e.preventDefault());
     window.addEventListener('keydown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('input, textarea')) return;   // typing a name
       if (e.repeat) { if (this.isGameKey(e.code)) e.preventDefault(); return; }
       this.keys.add(e.code);
       if (this.isGameKey(e.code)) e.preventDefault();

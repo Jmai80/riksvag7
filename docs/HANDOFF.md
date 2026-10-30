@@ -1,6 +1,6 @@
 # Riksväg 7 – överlämning
 
-Senast uppdaterad 30 oktober 2026 (version 1.0).
+Senast uppdaterad 30 oktober 2026 (version 1.1).
 
 ## 1. Vad som finns
 
@@ -41,18 +41,27 @@ Med autopilot på egen hand är tiderna ungefär 2:15 / 2:11 / 2:08.
 - Datorförarna: `RIVALS` (namn, bil, lack, `skill` i kurvor, `pace` på raksträckor). Gummiband: saktar in när de leder stort, lite snabbare när de ligger efter. Respawn om de fastnar utom synhåll.
 - Spelaren sätts tillbaka på vägen (`resetPlayer`): med knappen (2,5 s spärr), längre än `LIMIT` (75 m) från vägen, eller i sjön.
 
-## 5. Tester
+## 5. Topplistan (v1.1)
+
+- Tabell `riksvag7_highscores` i Supabase-projektet **cityguess**: `id`, `created_at`, `name` (1–16 tecken), `car` (`svala`/`falk`/`lo`), `time_ms` (100 000–900 000, alltså 1:40–15:00), `position` (1–6), `version`. RLS: `anon` och `authenticated` får läsa och lägga till; ingen policy för att ändra eller ta bort (rensa i Table Editor). SQL: `supabase/riksvag7_highscores.sql` (kördes av användaren 30 okt 2026).
+- `src/leaderboard.js`: `fetchTop(bil|null, 10)` sorterat på `time_ms`, `submit({ name, car, timeMs, position, version })` med `Prefer: return=representation` (ger id:t så att raden kan markeras), `rankOf(tid, bil)` räknar snabbare tider med `Prefer: count=exact` och läser `Content-Range`.
+- Resultatskärmen: namnfält (namnet sparas i inställningarna), **SPARA TID** (en gång per race), meddelande med placeringen totalt och med bilen, länken **Visa topplistan**. Startsidan: knappen **TOPPLISTA**. Topplistan har flikar för alla bilar och varje bil, din sparade rad markeras. Namn skrivs ut som text (aldrig som HTML).
+- Spärren mot fusk är enkel: tiden måste vara rimlig. Den publika nyckeln står i koden (som i cityguess), så den som vill kan skicka en påhittad tid direkt till Supabase. Behövs mer skydd: en Edge Function som kontrollerar tiden, eller en sparad körning som spelas upp på servern.
+
+## 6. Tester
 
 - `npm test` (`test/sim.mjs`): vägen, världen (inget på vägen), bilarna (siffror, kontroller, sladd, gräs, krön), att man inte kan lämna bilen eller ta sig in i hus, hela racet med alla sex i mål, återställning, fel håll.
-- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py` (se CLAUDE.md).
+- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py`, `board.py` (se CLAUDE.md). `npm test` testar också topplistans anrop mot en låtsasserver.
 
-## 6. Idéer för nästa version
+## 7. Idéer för nästa version
 
 - Fler banor (en kustväg, en kvällsetapp med strålkastare), varv på en rundbana.
 - Tidskörning mot ett "spöke" av ditt bästa lopp.
 - Skador och smuts på lacken, regn.
 - Fler bilar eller uppgraderingar (som Lasses butik i GTA 7).
 
-## 7. Versionshistorik
+## 8. Versionshistorik
+
+- **1.1** (30 okt 2026): topplistan på nätet i Supabase-projektet cityguess (tabellen `riksvag7_highscores`), spara tid efter målgången, TOPPLISTA på startsidan, flikar per bil. Placeringen skrivs nu 3:e i stället för 3:a.
 
 - **1.0** (30 okt 2026): första racet Ekeby–Sjuby. Tre bilar (Svala RS, Falk GT, Lo V8) med realistiska modeller, fem datorförare, bilval med lackfärger, HUD med minikarta, motorljud med växlar, resultat och rekord.

@@ -2,7 +2,7 @@
 
 Startpunkten för en ny Claude Code-session. Läs hela filen och sedan `docs/HANDOFF.md`.
 
-Senast uppdaterad 30 oktober 2026, version **1.0**: första racet Ekeby–Sjuby med tre valbara bilar och fem datorförare.
+Senast uppdaterad 30 oktober 2026, version **1.1**: topplistan på nätet (Supabase). Version 1.0 var första racet Ekeby–Sjuby med tre valbara bilar och fem datorförare.
 
 ## 1. Projektet på en minut
 
@@ -11,6 +11,8 @@ Senast uppdaterad 30 oktober 2026, version **1.0**: första racet Ekeby–Sjuby 
 - **Man kan inte lämna bilen** och **inte gå in i byggnader**: det finns ingen kliv-ur-knapp eller kod för det, och alla hus är solida kollisioner. Testerna kontrollerar båda.
 - Simuleringen (bana, fysik, AI, race) är ren JavaScript utan three.js och testas i Node. Grafiken är separat.
 - Spelet ligger på **https://jmai80.github.io/riksvag7/** (GitHub Pages från `main`, repots rot).
+- **Topplistan** är tabellen `riksvag7_highscores` i användarens Supabase-projekt **cityguess** (samma projekt som cityguess egen `highscores`; användaren har även ett projekt "wordle" för andra spel). `src/leaderboard.js` anropar Supabase REST med `fetch` och den publika nyckeln, som cityguess `app.js`. Tabellen och dess regler (RLS: alla får läsa och lägga till, ingen får ändra eller ta bort) finns i `supabase/riksvag7_highscores.sql`. Sandlådan når inte Supabase – testa mot låtsasservern i `test/browser/board.py` och be användaren provspela. Kopian i Claude får inte anropa andra värdar, så där säger spelet att topplistan nås från github.io.
+- **Databasändringar:** SQL körs i Supabase **SQL Editor** (säg det uttryckligen). Användaren föredrar annars Table Editor.
 
 ## 2. Användaren och arbetssättet (samma som i GTA 7)
 
@@ -32,6 +34,7 @@ python3 test/browser/smoke.py phone          # titel → bilval → race på aut
 python3 test/browser/full.py phone falk      # hela racet till resultatlistan
 python3 test/browser/views.py v 300 2600     # stora bilder från platser längs vägen (meter från start)
 python3 test/browser/studio.py car "car=lo&paint=orange&yaw=0.8"   # fotostudio för bilmodellerna (test/studio.html)
+python3 test/browser/board.py phone          # topplistan mot en låtsas-Supabase
 ```
 
 - Webbläsartesterna kör Chromium med SwiftShader. `test/browser/cdn.py` serverar three.js från `node_modules` (sandlådan når inte jsDelivr).
@@ -55,7 +58,8 @@ python3 test/browser/studio.py car "car=lo&paint=orange&yaw=0.8"   # fotostudio 
 | `src/scenery.js` | Världens meshar: terrängen (band längs vägen + rutnät i bitar), vägen, bron, sjön, fälten, husen, träden (instansade i bitar), räcken, stolpar, skyltar, portalerna, publiken. |
 | `src/render.js` | Renderare, sol och skuggor, himmel och miljökarta, bilarna, partiklar, följekameran (`CameraRig`, GTA 7:s bilkamera). |
 | `src/sky.js`, `src/textures.js` | Himlen (och reflexerna) och alla canvas-texturer. |
-| `src/hud.js`, `src/audio.js`, `src/input.js` | HUD med minikarta, ljudet (motor med växlar), touch/tangentbord/handkontroll. |
+| `src/hud.js`, `src/audio.js`, `src/input.js` | HUD med minikarta, ljudet (motor med växlar), touch/tangentbord/handkontroll (tangenterna släpps igenom när man skriver i ett textfält). |
+| `src/leaderboard.js`, `supabase/` | Topplistan: `fetchTop(bil)`, `submit(...)`, `rankOf(tid, bil)`, `cleanName`; SQL för tabellen. |
 | `test/sim.mjs` | Node-testerna. Stilen `check(ok, 'beskrivning')`. |
 
 ## 5. Fallgropar

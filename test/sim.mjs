@@ -208,5 +208,42 @@ section('the race');
   check(g.wrongWay, 'driving back toward Ekeby: FEL HÅLL');
 }
 
+section('the online leaderboard (Supabase, faked here)');
+{
+  const LB = await import('../src/leaderboard.js');
+  check(LB.cleanName('  Kalle \n  Anka  ') === 'Kalle Anka', 'names are tidied');
+  check(LB.cleanName('x'.repeat(30)).length === 16, 'names are cut at 16 characters');
+  const calls = [];
+  const rows = [{ id: 1, name: 'Tord', car: 'lo', time_ms: 131000 }, { id: 2, name: 'Sonja', car: 'falk', time_ms: 140500 }];
+  globalThis.fetch = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    const u = new URL(url), h = opts.headers || {};
+    if (opts.method === 'POST') { const r = { id: rows.length + 1, ...JSON.parse(opts.body) }; rows.push(r); return new Response(JSON.stringify([r]), { status: 201 }); }
+    let list = rows.slice().sort((a, b) => a.time_ms - b.time_ms);
+    const car = u.searchParams.get('car'), lt = u.searchParams.get('time_ms');
+    if (car) list = list.filter((r) => r.car === car.slice(3));
+    if (lt) list = list.filter((r) => r.time_ms < Number(lt.slice(3)));
+    const headers = h.Prefer === 'count=exact' ? { 'content-range': `0-0/${list.length}` } : {};
+    return new Response(JSON.stringify(list.slice(0, Number(u.searchParams.get('limit') || 10))), { status: 200, headers });
+  };
+  const top = await LB.fetchTop();
+  check(top.length === 2 && top[0].name === 'Tord', 'the list comes back fastest first');
+  check(calls[0].url.includes('/rest/v1/riksvag7_highscores') && calls[0].opts.headers.apikey.startsWith('sb_publishable_'), 'it asks the riksvag7_highscores table with the publishable key (as cityguess does)');
+  check(calls[0].url.includes('order=time_ms.asc'), 'ordered by time, lowest first');
+  const row = await LB.submit({ name: ' Jimmy ', car: 'svala', timeMs: 135400.4, position: 2, version: '1.1' });
+  const sent = JSON.parse(calls[calls.length - 1].opts.body);
+  check(row.id === 3 && sent.name === 'Jimmy' && sent.time_ms === 135400 && sent.car === 'svala' && sent.position === 2, 'a finished race is saved with name, car, time in ms and position');
+  const rk = await LB.rankOf(135400);
+  check(rk && rk.rank === 2 && rk.total === 3, `ranked ${rk && rk.rank} of ${rk && rk.total} overall`);
+  const rkc = await LB.rankOf(135400, 'svala');
+  check(rkc && rkc.rank === 1 && rkc.total === 1, 'and first with the Svala');
+  let refused = 0;
+  for (const bad of [{ name: '', car: 'lo', timeMs: 130000 }, { name: 'A', car: 'buss', timeMs: 130000 }, { name: 'A', car: 'lo', timeMs: 50000 }]) { try { await LB.submit(bad); } catch (_) { refused++; } }
+  check(refused === 3, 'no name, an unknown car or an impossible time is refused before it is sent');
+  globalThis.fetch = async () => new Response('nope', { status: 503 });
+  let threw = false; try { await LB.fetchTop(); } catch (_) { threw = true; }
+  check(threw, 'a server error shows up as an error (the game then says it could not reach the list)');
+}
+
 console.log(fails ? `\n${fails} of ${n} checks failed` : `\nAll checks passed (${n})`);
 process.exit(fails ? 1 : 0);

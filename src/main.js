@@ -10,14 +10,15 @@ import { AudioFX } from './audio.js';
 import { Vehicle } from './vehicle.js';
 import { CAR_TYPES, CAR_ORDER, PAINTS, zeroTo100, topSpeed } from './cars.js';
 import { smooth } from './rng.js';
+import { fetchTop, submit, rankOf, cleanName, MIN_MS, MAX_MS } from './leaderboard.js';
 
-export const VERSION = '1.0';
+export const VERSION = '1.1';
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 60;
 
 // ------------------------------------------------------------------ settings and best times
 const settings = (() => {
-  const def = { sound: true, drive: 'stick', cam: 'far', quality: 'auto', car: 'svala', paint: {} };
+  const def = { sound: true, drive: 'stick', cam: 'far', quality: 'auto', car: 'svala', paint: {}, name: '' };
   try { return { ...def, ...JSON.parse(localStorage.getItem('riksvag7-settings') || '{}') }; } catch (_) { return def; }
 })();
 const save = () => { try { localStorage.setItem('riksvag7-settings', JSON.stringify(settings)); } catch (_) { /* storage blocked */ } };
@@ -75,6 +76,7 @@ function show(id) { for (const s of ['title', 'select', 'hud', 'pausemenu', 'res
 
 function toTitle() {
   state = 'title'; paused = false;
+  $('board').hidden = true;
   endRace();
   show('title');
   const b = Object.entries(best).sort((a, c) => a[1] - c[1])[0];
@@ -85,6 +87,7 @@ function toTitle() {
 
 function toSelect() {
   state = 'select'; paused = false;
+  $('board').hidden = true;
   endRace();
   show('select');
   audio.init(); audio.click();
@@ -147,6 +150,7 @@ function cycleCar(d) {
 
 // ------------------------------------------------------------------ the race
 function startRace() {
+  $('board').hidden = true;
   const type = settings.car, paint = settings.paint[type] || CAR_TYPES[type].paints[0];
   audio.init();
   game = new Game({ track, world, carType: type, paint, settings });
@@ -187,13 +191,88 @@ function showResults() {
   const p = game.player, pos = p.finishPos, t = p.finishTime, type = p.type;
   const rec = !best[type] || t < best[type];
   if (rec) { best[type] = t; saveBest(); }
-  $('rPos').textContent = `${pos}:a`;
+  $('rPos').textContent = ordinal(pos);
   $('rText').textContent = pos === 1 ? 'VINST! 🏆' : pos === 2 ? 'ANDRA PLATS' : pos === 3 ? 'PALLPLATS' : 'I MÅL';
   $('rTime').innerHTML = `Din tid: ${fmtTime(t)}${rec ? ' · <span class="rec">Nytt rekord!</span>' : ` · Rekord: ${fmtTime(best[type])}`}`;
   const st = game.standings();
   $('rTable').innerHTML = st.map((r, i) => `<tr class="${r.player ? 'me' : ''}"><td>${i + 1}</td><td>${r.player ? 'Du' : r.name} <small>${CAR_TYPES[r.type].name}</small></td><td>${r.est ? '≈' : ''}${fmtTime(r.time)}</td></tr>`).join('');
+  // the online leaderboard: your name from last time, one save per race
+  const ms = Math.round(t * 1000), ok = ms >= MIN_MS && ms <= MAX_MS;
+  $('saveBox').hidden = false;
+  $('pName').value = settings.name || '';
+  $('pName').disabled = !ok;
+  $('pSave').disabled = !ok; $('pSave').textContent = 'SPARA TID';
+  setSaveMsg(ok ? 'Spara tiden så syns den för alla som spelar.' : 'Den här tiden kan inte sparas i topplistan.', '');
+  savedId = null;
   $('results').hidden = false;
   input.enabled = false; input.releaseAll();
+}
+
+// ------------------------------------------------------------------ the online leaderboard
+let savedId = null, boardCar = '', boardSeq = 0;
+// Supabase can only be reached from the real site (the copy inside Claude may not call other hosts)
+const offlineMsg = () => (/github\.io$|localhost|127\.0\.0\.1/.test(location.hostname) ? 'Topplistan gick inte att nå just nu.' : 'Topplistan nås från spelet på jmai80.github.io/riksvag7.');
+const ordinal = (n) => `${n}:${n % 10 === 1 || n % 10 === 2 ? (n % 100 === 11 || n % 100 === 12 ? 'e' : 'a') : 'e'}`;
+function setSaveMsg(text, kind) { const m = $('saveMsg'); m.textContent = text; m.className = kind || ''; }
+
+async function saveTime() {
+  if (!game || !game.player.finished || savedId) return;
+  const name = cleanName($('pName').value);
+  if (!name) { setSaveMsg('Skriv ditt namn först.', 'err'); $('pName').focus(); return; }
+  settings.name = name; save();
+  const p = game.player, timeMs = Math.round(p.finishTime * 1000), car = p.type;
+  $('pSave').disabled = true; $('pSave').textContent = 'SPARAR…';
+  try {
+    const row = await submit({ name, car, timeMs, position: p.finishPos, version: VERSION });
+    savedId = row && row.id;
+    $('pSave').textContent = 'SPARAT ✓'; $('pName').disabled = true;
+    audio.click();
+    let msg = 'Sparat!';
+    try {
+      const [all, mine] = await Promise.all([rankOf(timeMs), rankOf(timeMs, car)]);
+      if (all) msg = `Sparat! Du är ${ordinal(all.rank)} av ${all.total} på topplistan`;
+      if (all && mine) msg += ` och ${ordinal(mine.rank)} av ${mine.total} med ${CAR_TYPES[car].name}`;
+      if (all) msg += '.';
+    } catch (_) { /* the rank is a bonus */ }
+    setSaveMsg(msg, 'ok');
+  } catch (e) {
+    $('pSave').disabled = false; $('pSave').textContent = 'SPARA TID';
+    setSaveMsg(/github\.io$|localhost|127\.0\.0\.1/.test(location.hostname) ? 'Topplistan gick inte att nå just nu. Försök igen om en stund.' : offlineMsg(), 'err');
+    console.warn('topplistan', e);
+  }
+}
+
+function openBoard(car = '') {
+  $('board').hidden = false;
+  showBoard(car);
+}
+
+async function showBoard(car) {
+  boardCar = car;
+  const seq = ++boardSeq;
+  for (const b of $('bChips').children) b.classList.toggle('on', b.dataset.car === car);
+  const list = $('bList'), msg = $('bMsg');
+  list.innerHTML = ''; msg.textContent = 'Hämtar topplistan…';
+  try {
+    const rows = await fetchTop(car || null, 10);
+    if (seq !== boardSeq) return;
+    msg.textContent = rows.length ? '' : 'Inga tider än – bli först!';
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (savedId && r.id === savedId) li.className = 'me';
+      const b = document.createElement('b'); b.textContent = String(i + 1);
+      const sp = document.createElement('span'); sp.textContent = r.name;
+      const sm = document.createElement('small'); sm.textContent = CAR_TYPES[r.car] ? CAR_TYPES[r.car].name : r.car;
+      sp.appendChild(sm);
+      const em = document.createElement('em'); em.textContent = fmtTime(r.time_ms / 1000);
+      li.append(b, sp, em);
+      list.appendChild(li);
+    });
+  } catch (e) {
+    if (seq !== boardSeq) return;
+    msg.textContent = offlineMsg();
+    console.warn('topplistan', e);
+  }
 }
 
 function pause(on) {
@@ -231,6 +310,12 @@ function wireUi() {
   on('mSound', () => toggleSound());
   on('mQuality', () => { const o = ['auto', 'pretty', 'saver']; settings.quality = o[(o.indexOf(settings.quality) + 1) % 3]; view.applyQuality(settings.quality); save(); refreshMenu(); });
   on('muted', () => toggleSound());
+  on('topBtn', () => { audio.init(); audio.click(); openBoard(''); });
+  on('rBoard', () => openBoard(game ? game.player.type : ''));
+  on('bClose', () => { $('board').hidden = true; });
+  on('pSave', () => saveTime());
+  $('pName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('pName').blur(); saveTime(); } });
+  for (const b of $('bChips').children) b.addEventListener('click', () => showBoard(b.dataset.car));
   on('rAgain', () => { $('results').hidden = true; startRace(); });
   on('rCars', () => { $('results').hidden = true; toSelect(); });
   // swipe on the picker's 3D view to change car
@@ -284,7 +369,7 @@ function tick(dt, draw) {
   } else if (state === 'select') {
     if (inp.ok) startRace();
   } else if (state === 'title') {
-    if (inp.ok) toSelect();
+    if (inp.ok && $('board').hidden) toSelect();
   }
   if (paused) { if (draw) view.render(); return; }
 
@@ -340,7 +425,7 @@ function autoQuality(dt) {
 window.__rv = {
   get game() { return game; }, get state() { return state; }, get view() { return view; }, get track() { return track; }, get world() { return world; },
   settings, toSelect, startRace, pause, showResults, setCar: (t) => { settings.car = t; showPicker(); }, setPaint,
-  smooth,
+  smooth, openBoard, saveTime,
   // run the game for a while without drawing, then draw one frame (manual mode)
   run(sec, step = 1 / 30, draw = true) { const n = Math.round(sec / step); for (let i = 0; i < n; i++) tick(step, draw && i === n - 1); },
   // step until cond() holds (or maxSec of game time), then draw one frame
