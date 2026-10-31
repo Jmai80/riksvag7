@@ -1,6 +1,6 @@
 # Riksväg 7 – överlämning
 
-Senast uppdaterad 30 oktober 2026 (version 1.3).
+Senast uppdaterad 31 oktober 2026 (version 1.4).
 
 ## 1. Vad som finns
 
@@ -19,6 +19,13 @@ Två banor på Riksväg 7 (vägen är 5,78 km): **Bana 1** Ekeby → Sjuby på d
 - `Course(track, id)` lägger en riktning ovanpå vägen. Racet (`Game`), datorförarna och HUD:en får en `Course` som `track` och använder bara `zones.start/finish`, `pointAt`, `beside`, `project` (+ `lastDist`), `groundHeight`, `surfaceAt`. Bana 2 räknar sträckan baklänges (`roadS(s) = L − s`), vänder riktning och krökning, och har en egen hastighetsprofil (`track.speedProfile(true)`: bromspunkterna före kurvorna i den nya färdriktningen).
 - Världen byggs en gång längs vägens egen riktning. Det som skiljer banorna åt: banderollerna på portalerna (`setCourse` i scenery.js byter textur), startlamporna (bana 1 på Ekeby-portalen mot gridet före den, bana 2 på Sjuby-portalen mot gridet bortom den), avståndsskyltarna (`course: 1|2` på skylten, visas bara i sitt race), och vägskyltar åt båda hållen (`dir: -1` = vända mot trafiken mot Ekeby). Bana 2:s målportal (`kind: 'goal2'`, `zones.finish2` = 161 m) läggs sist i `World` med eget slumpfrö, så att inget annat flyttar sig; i bana 1 står det LYCKA TILL! på den. Den ligger 91 m före bana 1:s start så att bilarna hinner bromsa före vägens slut.
 - Skymningen: `MOODS.dusk` i sky.js (låg sol under horisonten, lila zenit, orange glöd, stjärnor, rosa moln) och `LIGHT.dusk` i render.js (svag sol, inga skuggor, tätare dimma, högre exponering). `View.setMood(mood)` byter himmel, miljökarta (en per stämning, cachad), ljus, dimma och tänder: fönster och butiker (emissiveMap), gatlyktornas glas och ljuskäglor på vägen (additiva plan), banderollerna, bilarnas strålkastare och baklyktor (`CarModel.setNight`: ljuskägla på vägen, bländskenor) och en `SpotLight` på din bil (`attachHeadlights`). Shaders för båda stämningarna kompileras vid laddningen.
+
+## 2c. Startsidans flygning (src/titlecam.js, v1.4)
+
+- `TitleCam` flyger längs vägen från 760 m till 760 m före slutet (stadskärnornas flerfamiljshus skulle fylla bilden) i 15 m/s, ett varv på ~4 min 44 s.
+- Svinget: sidoläget `d = −60·sin(ωt)` och blicken vriden `1,05·sin(ωt)` rad mot vägens riktning – ute till vänster tittar den snett över vägen åt höger och tvärtom. Perioden justeras till ett helt antal sving per varv (~18 s), så att varje varv blir likadant.
+- Höjden: 13 m över marken mitt över vägen, 30 m ute vid sidan, men alltid 5 m över allt i närheten (trädtoppar ≈ `y + 19·s`, tak, kyrkspiran, lyktstolpar, portaler – samlade i 8 m-rutor). Hela varvets höjder räknas ut vid start, begränsas till 6 m/s upp/ner (framåt och bakåt, runt varvet) och jämnas ut två gånger, så att kameran börjar stiga i god tid före en skog.
+- Blickpunkten ligger 140 m bort på marken; på en stående telefon sänks den 10 m så att landskapet syns ovanför vägskylten.
 
 ## 3. Bilarna
 
@@ -64,7 +71,7 @@ Med autopilot på egen hand är tiderna ungefär 2:15 / 2:11 / 2:08.
 ## 7. Tester
 
 - `npm test` (`test/sim.mjs`): vägen, världen (inget på vägen), bilarna (siffror, kontroller, sladd, gräs, krön), att man inte kan lämna bilen eller ta sig in i hus, hela racet med alla sex i mål, återställning, fel håll – och samma sak för bana 2 (vägen baklänges, bromspunkter, skyltar per bana, hela racet till Ekeby, fel håll och TILLBAKA).
-- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py`, `board.py`, `sound.py` (se CLAUDE.md). `smoke.py` och `full.py` tar banan som sista argument (`smoke.py phone svala 2`). `npm test` testar också topplistans anrop (per bana) mot en låtsasserver.
+- `test/browser/smoke.py`, `full.py`, `views.py`, `studio.py`, `board.py`, `sound.py`, `title.py` (se CLAUDE.md). `smoke.py` och `full.py` tar banan som sista argument (`smoke.py phone svala 2`). `npm test` testar också topplistans anrop (per bana) mot en låtsasserver.
 
 ## 8. Idéer för nästa version
 
@@ -74,6 +81,8 @@ Med autopilot på egen hand är tiderna ungefär 2:15 / 2:11 / 2:08.
 - Fler bilar eller uppgraderingar (som Lasses butik i GTA 7).
 
 ## 9. Versionshistorik
+
+- **1.4** (31 okt 2026): startsidans kamera flyger längs hela vägen och sveper som en pendel från sida till sida, med blicken över vägen mot landskapet; lågt över vägen, högt ute vid sidan, alltid över träd och tak.
 
 - **1.3** (30 okt 2026): **Bana 2 – Kvällsracet**, Sjuby → Ekeby i skymningen: lila himmel med stjärnor, tända fönster och gatlyktor, strålkastare och baklyktor, egen målportal i Ekeby, avståndsskyltar och vägskyltar för hållet tillbaka. Banval överst i bilvalet. Topplistan har en kolumn för banan (`track`) och flikar per bana; rekorden sparas per bana. Kameran på startsidan flyger inte längre genom husen i Ekeby.
 

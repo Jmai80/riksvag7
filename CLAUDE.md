@@ -2,7 +2,7 @@
 
 Startpunkten för en ny Claude Code-session. Läs hela filen och sedan `docs/HANDOFF.md`.
 
-Senast uppdaterad 30 oktober 2026, version **1.3**: **två banor** – Bana 1 Ekeby → Sjuby på dagen och Bana 2 "Kvällsracet" Sjuby → Ekeby i skymningen med strålkastare – och topplistan per bana. Version 1.2 gav detaljerade träd och en lugn målgång, 1.1 topplistan på nätet (Supabase), 1.0 första racet med tre valbara bilar och fem datorförare.
+Senast uppdaterad 31 oktober 2026, version **1.4**: startsidans kamera flyger längs hela vägen och **sveper från sida till sida** över landskapet. Version 1.3 gav **två banor** – Bana 1 Ekeby → Sjuby på dagen och Bana 2 "Kvällsracet" Sjuby → Ekeby i skymningen med strålkastare – och topplistan per bana; 1.2 gav detaljerade träd och en lugn målgång, 1.1 topplistan på nätet (Supabase), 1.0 första racet med tre valbara bilar och fem datorförare.
 
 ## 1. Projektet på en minut
 
@@ -39,6 +39,7 @@ python3 test/browser/board.py phone          # topplistan mot en låtsas-Supabas
 python3 test/browser/sound.py                # ljudet kring målgången, mätt med en analysator: "SOUND ok"
 PHONE=1 python3 test/browser/views.py t 1745 # telefonbilder från platser längs vägen
 python3 test/browser/sheet.py lo 2           # skärmdumpsarkets bilder längs ett helt race (här bana 2)
+python3 test/browser/title.py phone 8 2.5 105   # startsidans flygning: 8 bilder med 2,5 s mellanrum, från sekund 105 (sjön)
 python3 test/browser/compose.py ut.png 3 "test/shots/a.png|Bildtext" …   # arket: rutnät med gula bildtexter
 ```
 
@@ -53,6 +54,7 @@ python3 test/browser/compose.py ut.png 3 "test/shots/a.png|Bildtext" …   # ark
 |---|---|
 | `index.html` | All CSS och alla overlays: laddning, titel (vägskylten), bilval med banval (`#courses`), HUD, touchknappar, paus, resultat, topplistan (`#bTracks`, `#bChips`). |
 | `src/main.js` | Skärmarna och loopen (fast 60 Hz-simulering), kameran per skärm, inställningar och rekord i `localStorage`, `window.__rv`. |
+| `src/titlecam.js` | Startsidans kamera (`TitleCam`, inställningarna i `SWEEP`): flyger längs vägen mellan stadskärnorna och svingar ±60 m från sida till sida (ett helt antal sving per varv), blicken vänd över vägen; höjden räknas ut i förväg för hela varvet (över trädtoppar och tak, högst 6 m/s upp eller ner, mjukt utjämnad). `#veil` tonar till svart där varvet börjar om. |
 | `src/track.js` | Vägen (`CORNERS`: punkter med kurvradie, samplad var 2 m), zonerna (`ekeby`, `farm`, `forest`, `lake`/`bridge`, `mellby`, `ridge`, `sjuby`, `start`, `finish`, `finish2` (bana 2:s mål), `bumps`), höjdprofilen, landskapet (`natural`, `height`), `groundHeight`/`surfaceAt` för fysiken, `nearest`/`project`, `speedProfile(baklänges)`. |
 | `src/course.js` | Banorna: `COURSES` (namn, stämning, riktning), `Course` (vägen åt ett håll: `zones`, `pointAt`, `beside`, `project`, egen hastighetsprofil). |
 | `src/world.js` | Allt längs vägen som data + kollisionsgriden: `buildings`, `trees`, `fields`, `rails`, `lamps`, `poles`, `posts`, `signs`, `gantries`, `crowd`, `rocks`, `bales`, `flags`, `docks`. |
@@ -79,4 +81,5 @@ python3 test/browser/compose.py ut.png 3 "test/shots/a.png|Bildtext" …   # ark
 - **Prestanda:** varje bil är ~33 000 trianglar; de enkla träden ~70–90 var, de detaljerade 480–660. En bild med skuggor är ~550 000–820 000 trianglar och ~220–360 anrop (mätt med `renderer.info`). Bara de detaljerade träden kastar skuggor; skuggrutan är ±58 m och ligger lite framför bilen. Grafikvalen Snygg/Auto/Snabb finns i `QUALITY` i render.js; Snabb stänger av de detaljerade träden, Auto sänker upplösningen och stänger av skuggor om bildfrekvensen faller.
 - **Skymningen** är ljusare än natt med flit (exponering 1,2, ingen skuggkarta). Strålkastarna är en `SpotLight` på din bil plus additiva ljusplan; fler riktiga ljus blir dyrt på mobilen. Ändras antalet synliga ljus kompileras shaders om – `boot()` kompilerar båda stämningarna i förväg.
 - **Världens slumpföljd:** saker som ska finnas bara för en bana (som bana 2:s målportal) läggs sist i `World` med eget frö, annars flyttar sig träd och hus i bana 1.
+- **Startsidans flygning** räknar ut höjden för ett helt varv när spelet laddas (ca 2 800 punkter). Ändras vägen, husen eller träden följer höjden med automatiskt; Node-testerna kontrollerar att kameran aldrig går in i ett träd eller hus och att den stiger och sjunker mjukt.
 - **Ljudet efter målgången:** allt kontinuerligt (motorer, vind, däck, grus) tonas ut när `audio.calm` är satt. Glöm inte `audio.reset()` när ett nytt race startar.

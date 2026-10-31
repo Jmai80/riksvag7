@@ -9,11 +9,12 @@ import { Hud, fmtTime } from './hud.js';
 import { Input } from './input.js';
 import { AudioFX } from './audio.js';
 import { Vehicle } from './vehicle.js';
+import { TitleCam } from './titlecam.js';
 import { CAR_TYPES, CAR_ORDER, PAINTS, zeroTo100, topSpeed } from './cars.js';
 import { smooth } from './rng.js';
 import { fetchTop, submit, rankOf, cleanName, MIN_MS, MAX_MS } from './leaderboard.js';
 
-export const VERSION = '1.3';
+export const VERSION = '1.4';
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 60;
 
@@ -37,7 +38,7 @@ const best = (() => {
 })();
 const saveBest = () => { try { localStorage.setItem('riksvag7-best', JSON.stringify(best)); } catch (_) { /* storage blocked */ } };
 
-let track, world, view, hud, input, audio;
+let track, world, view, hud, input, audio, titleCam;
 const courses = {};
 const course = () => courses[settings.course] || courses[1];
 let game = null;
@@ -57,6 +58,7 @@ async function boot() {
   for (const id of COURSE_IDS) courses[id] = new Course(track, id);
   setLoad(0.2, 'Bygger hus och planterar skog…'); await frame();
   world = new World(track);
+  titleCam = new TitleCam(track, world);
   setLoad(0.4, 'Lackar bilarna…'); await frame();
   view = new View($('c'), track, world, settings.quality);
   view.rig.mode = settings.cam;
@@ -104,6 +106,7 @@ function toTitle() {
   $('titleBest').textContent = recs.length ? `Dina rekord: ${recs.map(([id, t]) => `${COURSES[id].short} ${fmtTime(t)}`).join(' · ')}` : 'Ekeby–Sjuby på under 2:20? Prova!';
   view.setMood('day'); view.scenery.setCourse(1);
   view.setCars([]);
+  titleCam.enter();
   view.rig.blendT = 1;
 }
 
@@ -426,14 +429,12 @@ function tick(dt, draw) {
   const rig = view.rig, aspect = view.camera.aspect;
   const camWorld = { raycast: (a, b, c, d, e) => world.grid.raycast(a, b, c, d, e), groundAt: (x, z) => track.height(x, z) };
   if (state === 'title') {
-    // a slow drive along the road, high and to the side (between the town centres, whose blocks of
-    // flats are taller than the camera)
-    const s = 760 + ((time * 14) % (track.L - 1520));
-    const p = track.beside(s, -16, {}), q = track.beside(s + 70, 2, {});
-    const y = Math.max(track.height(p.x, p.z), p.y) + 13;
-    rig.pos.set(p.x, y, p.z);
-    rig.look.set(q.x, q.y + 2, q.z);
-    rig.apply(dt, aspect < 0.9 ? 62 : 52);
+    // the flight along the road, sweeping from side to side over the land (titlecam.js); upright
+    // phones tilt down a little more, so the land shows above the road sign
+    const c = titleCam.update(dt), portrait = aspect < 0.9;
+    rig.pos.set(c.pos.x, c.pos.y, c.pos.z);
+    rig.look.set(c.look.x, c.look.y - (portrait ? 10 : 3), c.look.z);
+    rig.apply(dt, portrait ? 64 : 54);
   } else if (state === 'select') {
     const portrait = aspect < 0.9, low = !portrait && innerHeight < 560;
     rig.orbit(dt, showCar.x, showCar.y + (portrait ? -1.6 : low ? 0 : -0.45), showCar.z, portrait ? 12.5 : low ? 8.5 : 7.4, portrait ? 3.2 : 1.9, 0.22, portrait ? 50 : 40, 0, low ? 2.4 : 0);
@@ -448,12 +449,20 @@ function tick(dt, draw) {
       rig.chase(dt, p, aspect, inp, camWorld);
     }
   }
+  setVeil(state === 'title' ? titleCam.veil : 0);
   view.sync(state === 'race' || state === 'results' ? game : null, dt);
   if (state === 'select' && showCar) view.syncCars(dt);
   if (game && (state === 'race' || state === 'results')) { audio.update(dt, game, view); hud.update(dt, game, view); }
   else if (audio.ctx) audio.update(dt, null, view);
   if (draw) view.render();
   if (!MANUAL) autoQuality(dt);
+}
+
+// the title flight fades through black where it starts over
+let veilOp = -1;
+function setVeil(v) {
+  const q = Math.round(v * 50) / 50;
+  if (q !== veilOp) { veilOp = q; $('veil').style.opacity = String(q); }
 }
 
 // keep the frame rate up on slow phones: lower the resolution, then the shadows
@@ -474,7 +483,7 @@ function autoQuality(dt) {
 // for the browser tests
 window.__rv = {
   get game() { return game; }, get state() { return state; }, get audio() { return audio; }, get view() { return view; }, get track() { return track; }, get world() { return world; },
-  get course() { return course(); }, courses, best,
+  get course() { return course(); }, courses, best, get titleCam() { return titleCam; },
   settings, toSelect, startRace, pause, showResults, setCar: (t) => { settings.car = t; showPicker(); }, setPaint, setCourse,
   smooth, openBoard, saveTime,
   // run the game for a while without drawing, then draw one frame (manual mode)

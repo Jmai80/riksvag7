@@ -282,6 +282,38 @@ const C1 = new Course(T, 1), C2 = new Course(T, 2);
   check(Math.sin(g.player.h) * a.dx + Math.cos(g.player.h) * a.dz > 0.99, 'facing Ekeby again');
 }
 
+section('the title screen: a flight sweeping from side to side');
+{
+  const { TitleCam } = await import('../src/titlecam.js');
+  const cam = new TitleCam(T, W);
+  let minL = 0, maxR = 0, minS = Infinity, maxS = 0, midH = 0, midN = 0, sideH = 0, sideN = 0, clipTree = 0, clipHouse = 0, maxStep = 0, maxAcc = 0, lastY = null, lastV = 0, veiled = 0, n2 = 0;
+  const dt = 1 / 30;
+  for (let i = 0; i < cam.loop / dt; i++) {
+    cam.update(dt);
+    const p = cam.pose(cam.t), c = cam.pos;
+    minL = Math.min(minL, p.d); maxR = Math.max(maxR, p.d); minS = Math.min(minS, p.s); maxS = Math.max(maxS, p.s);
+    const over = c.y - cam.clearAt(c.x, c.z).ground;
+    if (Math.abs(p.d) < 8) { midH += over; midN++; } else if (Math.abs(p.d) > 50) { sideH += over; sideN++; }
+    // nothing within reach of the camera reaches up to it
+    for (const t of W.trees) if (Math.abs(t.x - c.x) < 6 && Math.abs(t.z - c.z) < 6 && t.y + 19 * t.s > c.y) clipTree++;
+    for (const b of W.buildings) if (Math.hypot(b.x - c.x, b.z - c.z) < Math.hypot(b.w, b.d) / 2 + 3 && b.y + b.wallH + b.d * 0.45 + (b.kind === 'church' ? 24 : 0) > c.y) clipHouse++;
+    const vy = lastY === null ? 0 : (c.y - lastY) / dt;
+    if (lastY !== null && cam.veil < 0.5) { maxStep = Math.max(maxStep, Math.abs(vy)); maxAcc = Math.max(maxAcc, Math.abs(vy - lastV) / dt); }
+    lastY = c.y; lastV = vy; n2++;
+    if (cam.veil > 0.5) veiled++;
+  }
+  check(minL < -55 && maxR > 55, `it swings out to both sides of the road (${minL.toFixed(0)} … ${maxR.toFixed(0)} m)`);
+  check(minS < 800 && maxS > T.L - 800, 'and flies the whole way from Ekeby to Sjuby');
+  check(midH / midN < sideH / sideN - 5, `it swoops lower over the road (${(midH / midN).toFixed(0)} m) than out at the sides (${(sideH / sideN).toFixed(0)} m)`);
+  check(clipTree === 0 && clipHouse === 0, `it never flies into a tree or a house (${clipTree}, ${clipHouse})`);
+  check(maxStep < 12 && maxAcc < 15, `it rises and sinks smoothly (at most ${maxStep.toFixed(1)} m/s, ${maxAcc.toFixed(0)} m/s²)`);
+  check(veiled / n2 < 0.03, 'it fades to black only where it starts over');
+  // out at the side it looks across the road
+  const q = cam.pose(cam.period / 4);
+  const P = T.pointAt(q.s, {}), side = (q.lx - P.x) * -P.dz + (q.lz - P.z) * P.dx;
+  check(q.d < -50 && side > 30, 'out on the left it looks over the road to the land on the right');
+}
+
 section('the online leaderboard (Supabase, faked here)');
 {
   const LB = await import('../src/leaderboard.js');

@@ -48,6 +48,7 @@ html, body { height: 100%; margin: 0; background: var(--ink); overflow: hidden; 
 body { color: var(--paper); font: 15px/1.4 var(--ui); }
 #game { position: fixed; inset: 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#veil { position: absolute; inset: 0; background: #07080b; opacity: 0; pointer-events: none; z-index: 5; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
 button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 kbd { font: 700 0.8em/1 var(--ui); padding: 3px 6px 4px; border-radius: 5px; border: 1px solid var(--line); background: rgba(255,255,255,0.1); }
@@ -249,11 +250,12 @@ ol.board li.me { background: rgba(255,207,51,0.18); box-shadow: inset 0 0 0 1px 
 <body>
 <div id="game">
   <canvas id="c"></canvas>
+  <div id="veil"></div>
 
   <div id="loading"><div><div class="t">RIKSVÄG 7</div><p id="loadMsg">Asfalterar vägen…</p><div id="loadbar"><i></i></div></div></div>
 
   <div id="title" hidden>
-    <div class="ver" id="ver">Version 1.3 · Ekeby–Sjuby</div>
+    <div class="ver" id="ver">Version 1.4 · Ekeby–Sjuby</div>
     <div><div class="sign" aria-label="Riksväg 7"><span class="w">RIKSVÄG</span><span class="n">7</span></div></div>
     <div class="route">Två banor · Ekeby ⇄ Sjuby · 5,5 km</div>
     <div class="tagline">Tre bilar. Sex förare. Ut till Sjuby i solsken – och tillbaka i skymningen.</div>

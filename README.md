@@ -1,12 +1,14 @@
 # Riksväg 7
 
-Ett racingspel som körs direkt i webbläsaren och är byggt för mobilen först. Version 1.3 har **två banor** på samma 5,5 km landsväg mot fem datorförare: **Bana 1, Dagsetappen** från staden **Ekeby** till målet i **Sjuby** i solsken, och **Bana 2, Kvällsracet**, tillbaka från Sjuby till Ekeby i skymningen med strålkastarna på. Dessutom en **topplista på nätet** per bana, detaljerade träd längs vägen och en lugn stund med musik efter målgången.
+Ett racingspel som körs direkt i webbläsaren och är byggt för mobilen först. Version 1.4 har **två banor** på samma 5,5 km landsväg mot fem datorförare: **Bana 1, Dagsetappen** från staden **Ekeby** till målet i **Sjuby** i solsken, och **Bana 2, Kvällsracet**, tillbaka från Sjuby till Ekeby i skymningen med strålkastarna på. Dessutom en **topplista på nätet** per bana, detaljerade träd längs vägen, en lugn stund med musik efter målgången och en startsida där kameran flyger längs hela vägen och sveper från sida till sida över landskapet.
 
 **Spela:** https://jmai80.github.io/riksvag7/
 
 Spelet är syskon till [GTA 7](https://github.com/Jmai80/gta7) och delar dess grund: three.js 0.184 från jsDelivr, vanliga ES-moduler utan byggsteg, allt procedurellt (inga bild-, modell- eller ljudfiler) och samma bilfysik och kontroller. Skillnaden är att du aldrig kliver ur bilen – det finns ingen knapp för det – och att bilarna är byggda för att se riktiga ut i stället för tecknade.
 
 ## Racet
+
+- **Startsidan:** kameran flyger från Ekeby till Sjuby och svingar som en pendel ut till ena sidan av vägen och över till den andra. Ute vid sidan vänder den blicken över vägen mot landskapet bortom – åkrarna, skogen, Ekesjön och bron, Mellby med kyrkan – och över vägen sveper den lågt. Den stiger över träd, tak och kyrktornet på vägen.
 
 - **Välj bana** överst i bilvalet:
   - **Bana 1 · Dagsetappen** – Ekeby → Sjuby i eftermiddagssol.
@@ -38,6 +40,7 @@ Spelet är syskon till [GTA 7](https://github.com/Jmai80/gta7) och delar dess gr
 
 - `src/vehicle.js` – GTA 7:s bilfysik, plus backar, krön (bilen flyger när vägen faller undan) och gräs/grus som greppar sämre.
 - `src/track.js` – vägen (raksträckor och cirkelbågar var 2:a meter), höjdprofilen och landskapet runt den.
+- `src/titlecam.js` – startsidans svepande flygning längs vägen.
 - `src/course.js` – banorna: samma väg körd åt ena eller andra hållet (racet, datorförarna och HUD:en pratar bara med en bana).
 - `src/world.js` – allt längs vägen som data: hus, gårdar, kyrkan, träd, fält, räcken, skyltar och kollisioner.
 - `src/carmodel.js` – de realistiska bilarna: en mjuk kaross svept längs bilen, detaljer projicerade på ytan, hjul med fälgar och bromsok.
