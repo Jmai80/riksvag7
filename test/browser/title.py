@@ -1,5 +1,6 @@
 # The title screen's sweeping flight: shots every few seconds of game time.
 # python3 test/browser/title.py [phone|land] [count] [seconds between] [start second]
+# python3 test/browser/title.py phone 10.4,15,115.2 → shots at those seconds of the flight
 import asyncio, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from playwright.async_api import async_playwright
@@ -7,7 +8,8 @@ from cdn import route_cdn, ARGS
 VIEW = {'phone': (390, 844), 'land': (844, 390)}
 async def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else 'phone'
-    count = int(sys.argv[2]) if len(sys.argv) > 2 else 8
+    times = [float(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 and ',' in sys.argv[2] else None
+    count = len(times) if times else int(sys.argv[2]) if len(sys.argv) > 2 else 8
     gap = float(sys.argv[3]) if len(sys.argv) > 3 else 2.5
     start = float(sys.argv[4]) if len(sys.argv) > 4 else 0
     w, h = VIEW[mode]
@@ -24,8 +26,10 @@ async def main():
         await pg.wait_for_function('window.__rv && window.__rv.state === "title"', timeout=240000)
         if start: await pg.evaluate(f'window.__rv.titleCam.t = {start}')
         await pg.evaluate('window.__rv.run(1.2)')
+        if times: await pg.evaluate('window.__rv.run(3)')     # let the title fade in
         for i in range(count):
-            await pg.evaluate(f'window.__rv.run({gap}, 1/30)')
+            if times: await pg.evaluate(f'window.__rv.titleCam.t = {times[i] - 1.5}; window.__rv.run(1.5, 1/30)')
+            else: await pg.evaluate(f'window.__rv.run({gap}, 1/30)')
             info = await pg.evaluate('(() => { const c = window.__rv.titleCam, p = c.pose(c.t); return { t: c.t.toFixed(1), s: Math.round(p.s), d: Math.round(p.d), y: Math.round(c.pos.y - c.clearAt(c.pos.x, c.pos.z).ground), veil: c.veil.toFixed(2), tris: window.__rv.view.renderer.info.render.triangles }; })()')
             print(i, info)
             await pg.screenshot(path=f'test/shots/title_{mode}_{i}.png', timeout=120000)
